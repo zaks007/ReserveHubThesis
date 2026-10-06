@@ -1,0 +1,5 @@
+- [x] Replace Hotel Divinus photo with the uploaded image
+- [x] Set Hotel Divinus rating to 5.0
+- [x] Center and improve responsive page layouts
+- [x] Diagnose and fix the blank institution map
+- [x] Verify desktop and mobile presentation

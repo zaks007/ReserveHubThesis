@@ -1,0 +1,194 @@
+@import "tailwindcss" source(none);
+@source "../src";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+
+
+@theme inline {
+  --font-sans: Inter, system-ui, sans-serif;
+  --font-display: "Instrument Serif", "Times New Roman", serif;
+  --font-serif: "Instrument Serif", "Times New Roman", serif;
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-primary-glow: hsl(var(--primary-glow));
+
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+
+  --color-popover: hsl(var(--popover));
+  --color-popover-foreground: hsl(var(--popover-foreground));
+
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+
+  --color-success: hsl(var(--success));
+  --color-success-foreground: hsl(var(--success-foreground));
+  --color-warning: hsl(var(--warning));
+  --color-warning-foreground: hsl(var(--warning-foreground));
+  --color-info: hsl(var(--info));
+
+  --color-sidebar: hsl(var(--sidebar-background));
+  --color-sidebar-foreground: hsl(var(--sidebar-foreground));
+  --color-sidebar-primary: hsl(var(--sidebar-primary));
+  --color-sidebar-primary-foreground: hsl(var(--sidebar-primary-foreground));
+  --color-sidebar-accent: hsl(var(--sidebar-accent));
+  --color-sidebar-accent-foreground: hsl(var(--sidebar-accent-foreground));
+  --color-sidebar-border: hsl(var(--sidebar-border));
+  --color-sidebar-ring: hsl(var(--sidebar-ring));
+}
+
+:root {
+  --background: 210 33% 99%;
+  --foreground: 217 38% 11%;
+  --card: 0 0% 100%;
+  --card-foreground: 217 38% 11%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 217 38% 11%;
+  --primary: 215 62% 22%;
+  --primary-foreground: 210 40% 98%;
+  --primary-glow: 212 70% 46%;
+  --secondary: 215 25% 95%;
+  --secondary-foreground: 217 38% 16%;
+  --muted: 215 22% 95%;
+  --muted-foreground: 217 14% 42%;
+  --accent: 38 62% 50%;
+  --accent-foreground: 217 38% 11%;
+  --destructive: 0 70% 48%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 215 22% 90%;
+  --input: 215 22% 90%;
+  --ring: 215 62% 22%;
+  --radius: 0.625rem;
+  --success: 158 55% 32%;
+  --success-foreground: 0 0% 100%;
+  --warning: 38 92% 50%;
+  --warning-foreground: 217 38% 11%;
+  --info: 212 70% 46%;
+
+  --gradient-primary: linear-gradient(135deg, hsl(215 62% 22%), hsl(212 70% 46%));
+  --gradient-charcoal: linear-gradient(180deg, hsl(217 38% 12%), hsl(217 42% 8%));
+  --shadow-elegant: 0 18px 50px -22px hsl(217 38% 11% / 0.22);
+  --shadow-amber: 0 14px 36px -14px hsl(38 62% 50% / 0.28);
+
+  --sidebar-background: 217 40% 10%;
+  --sidebar-foreground: 215 22% 80%;
+  --sidebar-primary: 38 62% 55%;
+  --sidebar-primary-foreground: 217 38% 10%;
+  --sidebar-accent: 217 32% 14%;
+  --sidebar-accent-foreground: 215 22% 90%;
+  --sidebar-border: 217 28% 16%;
+  --sidebar-ring: 38 62% 55%;
+}
+
+.dark {
+  --background: 217 38% 8%;
+  --foreground: 210 30% 96%;
+  --card: 217 34% 11%;
+  --card-foreground: 210 30% 96%;
+  --popover: 217 34% 11%;
+  --popover-foreground: 210 30% 96%;
+  --primary: 212 72% 58%;
+  --primary-foreground: 217 38% 10%;
+  --primary-glow: 210 80% 70%;
+  --secondary: 217 28% 16%;
+  --secondary-foreground: 210 30% 92%;
+  --muted: 217 24% 18%;
+  --muted-foreground: 215 16% 62%;
+  --accent: 38 70% 58%;
+  --accent-foreground: 217 38% 10%;
+  --destructive: 0 62% 45%;
+  --destructive-foreground: 210 30% 96%;
+  --border: 217 24% 18%;
+  --input: 217 24% 18%;
+  --ring: 212 72% 58%;
+
+  --gradient-primary: linear-gradient(135deg, hsl(212 72% 50%), hsl(210 80% 68%));
+  --gradient-charcoal: linear-gradient(180deg, hsl(217 38% 10%), hsl(217 42% 6%));
+  --shadow-elegant: 0 18px 50px -22px hsl(0 0% 0% / 0.55);
+  --shadow-amber: 0 14px 36px -14px hsl(38 70% 58% / 0.32);
+}
+
+@layer base {
+  * {
+    border-color: hsl(var(--border));
+  }
+
+  body {
+    background-color: hsl(var(--background));
+    color: hsl(var(--foreground));
+    font-family: 'Inter', system-ui, sans-serif;
+    font-feature-settings: 'ss01', 'cv11';
+    -webkit-font-smoothing: antialiased;
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: 'Instrument Serif', 'Times New Roman', serif;
+    font-weight: 400;
+    letter-spacing: -0.01em;
+  }
+}
+
+@layer components {
+  .container {
+    width: 100%;
+    max-width: 80rem;
+    margin-inline: auto;
+    padding-inline: 1rem;
+  }
+
+  @media (min-width: 640px) {
+    .container { padding-inline: 1.5rem; }
+  }
+
+  @media (min-width: 1024px) {
+    .container { padding-inline: 2rem; }
+  }
+
+  .hero-overlay {
+    background: linear-gradient(
+      180deg,
+      hsl(217 42% 8% / 0.78) 0%,
+      hsl(217 38% 10% / 0.42) 50%,
+      hsl(217 38% 10% / 0.88) 100%
+    );
+  }
+
+  .card-hover { transition: all 0.3s; }
+  .card-hover:hover {
+    box-shadow: var(--shadow-elegant);
+    transform: translateY(-0.25rem);
+  }
+
+  .badge-hotel { background: hsl(var(--primary) / 0.1); color: hsl(var(--primary)); }
+  .badge-university { background: rgb(4 120 87 / 0.1); color: rgb(6 95 70); }
+  .badge-sports { color: hsl(var(--accent)); background: hsl(var(--accent) / 0.12); }
+  .badge-garden { background: rgb(22 101 52 / 0.1); color: rgb(22 101 52); }
+  .badge-airbnb { background: rgb(225 29 72 / 0.1); color: rgb(190 18 60); }
+
+  .status-confirmed { background: rgb(5 150 105 / 0.1); color: rgb(4 120 87); }
+  .status-pending { background: rgb(245 158 11 / 0.1); color: rgb(180 83 9); }
+  .status-cancelled { background: rgb(244 63 94 / 0.1); color: rgb(225 29 72); }
+}
