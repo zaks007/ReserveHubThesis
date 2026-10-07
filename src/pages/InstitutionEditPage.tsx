@@ -4,7 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import ImageDrop from "@/components/ImageDrop";
+import MultiImageDrop from "@/components/MultiImageDrop";
 import InstitutionStructureEditor from "@/components/InstitutionStructureEditor";
 import { useAuth } from "@/contexts/AuthContext";
 import { useInstitutions } from "@/contexts/InstitutionsContext";
@@ -18,7 +18,16 @@ const Field = ({ label, children }: { label: string; children: React.ReactNode }
   </div>
 );
 
-const empty = { name: "", type: "hotel", city: "Debrecen", address: "", description: "", image: "", rating: 0 };
+const empty = {
+  name: "",
+  type: "hotel",
+  city: "Debrecen",
+  address: "",
+  description: "",
+  image: "",
+  images: [] as string[],
+  rating: 0,
+};
 
 const InstitutionEditPage = () => {
   const { id } = useParams<{ id: string }>();
@@ -32,13 +41,20 @@ const InstitutionEditPage = () => {
 
   useEffect(() => {
     if (institution) {
+      const imgs = institution.images && institution.images.length > 0
+        ? institution.images
+        : (institution.image ? [institution.image] : []);
       setForm({
-        name: institution.name, type: institution.type, city: institution.city,
-        address: institution.address || "", description: institution.description,
-        image: institution.image, rating: institution.rating,
+        name: institution.name,
+        type: institution.type,
+        city: institution.city,
+        address: institution.address || "",
+        description: institution.description,
+        image: institution.image || imgs[0] || "",
+        images: imgs,
+        rating: institution.rating,
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [institution?.id]);
 
   if (loading) return <div className="container py-16 text-center text-muted-foreground">Checking your account…</div>;
@@ -53,23 +69,34 @@ const InstitutionEditPage = () => {
   }
 
   const set = (k: keyof typeof empty, v: any) => setForm((f) => ({ ...f, [k]: v }));
-  // University institutions can't be created from this page; existing ones keep their type.
   const typeOptions = Object.entries(typeLabelMap).filter(([k]) => k !== "university" || institution?.type === "university");
 
   const save = async () => {
-    if (!form.name.trim() || !form.city.trim()) { toast({ title: "Name and city are required", variant: "destructive" }); return; }
+    if (!form.name.trim() || !form.city.trim()) {
+      toast({ title: "Name and city are required", variant: "destructive" });
+      return;
+    }
     setSaving(true);
     try {
-      const data = { ...form, rating: Number(form.rating) || 0 };
+      const imagesList = form.images && form.images.length > 0 ? form.images : (form.image ? [form.image] : []);
+      const cover = imagesList[0] || form.image || "";
+      const data = {
+        ...form,
+        image: cover,
+        images: imagesList,
+        rating: Number(form.rating) || 0,
+      };
       const mode = isNew ? await createInstitution(data) : await updateInstitution(id!, data);
       toast({
         title: isNew ? "Institution added" : "Changes saved",
-        description: mode === "local" ? "Saved in this browser only (the database refused or this is demo data)." : form.name,
+        description: mode === "local" ? "Saved in browser storage (database was offline or not reachable)." : form.name,
       });
       navigate("/admin/super");
     } catch (e: any) {
       toast({ title: "Could not save", description: e.message, variant: "destructive" });
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -91,8 +118,20 @@ const InstitutionEditPage = () => {
           <Field label="City *"><Input value={form.city} onChange={(e) => set("city", e.target.value)} /></Field>
           <Field label="Address"><Input value={form.address} onChange={(e) => set("address", e.target.value)} /></Field>
           <Field label="Rating (0–5)"><Input type="number" min={0} max={5} step={0.1} value={form.rating} onChange={(e) => set("rating", e.target.value)} /></Field>
-          <div className="md:col-span-2"><Field label="Description"><Textarea rows={4} value={form.description} onChange={(e) => set("description", e.target.value)} /></Field></div>
-          <div className="md:col-span-2"><Field label="Main photo"><ImageDrop value={form.image} onChange={(v) => set("image", v)} /></Field></div>
+          <div className="md:col-span-2">
+            <Field label="Description"><Textarea rows={4} value={form.description} onChange={(e) => set("description", e.target.value)} /></Field>
+          </div>
+          <div className="md:col-span-2">
+            <Field label="Photos (first photo is used as main cover)">
+              <MultiImageDrop
+                values={form.images || []}
+                onChange={(urls) => {
+                  set("images", urls);
+                  set("image", urls[0] || "");
+                }}
+              />
+            </Field>
+          </div>
         </div>
         <div className="flex justify-end gap-2 mt-6">
           <Button variant="outline" onClick={() => navigate("/admin/super")} disabled={saving}>Cancel</Button>

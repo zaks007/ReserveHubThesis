@@ -14,6 +14,7 @@ export interface Institution {
   city: string;
   description: string;
   image: string;
+  images?: string[];
   rating: number;
   coords?: Coords;
   address?: string;
@@ -44,6 +45,7 @@ export interface Space {
   name: string;
   capacity: number;
   image: string;
+  images?: string[];
   features: string[];
   /** Price in HUF expressed per `priceUnit` (hour / night / month). Field kept as
    *  `pricePerHour` for backwards compatibility — read alongside `priceUnit`. */

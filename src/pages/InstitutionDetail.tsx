@@ -3,6 +3,7 @@ import { MapPin, Star, Users, DoorOpen, Building2, ArrowLeft } from "lucide-reac
 import { Button } from "@/components/ui/button";
 import Breadcrumbs from "@/components/Breadcrumbs";
 import InstitutionMap, { MapMarker } from "@/components/InstitutionMap";
+import ImageGallery from "@/components/ImageGallery";
 import { typeLabelMap, typeBadgeClass } from "@/data/mockData";
 import type { Space } from "@/data/mockData";
 import { useInstitutions } from "@/contexts/InstitutionsContext";
@@ -27,18 +28,15 @@ const InstitutionDetail = () => {
     ? institution.campuses!.find((c) => c.id === selectedCampusId)
     : undefined;
 
-  // Build map markers based on the current view
   let mapMarkers: MapMarker[] = [];
   let mapTitle = "Location";
 
   if (hasCampuses && !selectedCampus) {
-    // University overview — show all campuses
     mapMarkers = institution.campuses!
       .filter((c) => c.coords)
       .map((c) => ({ lat: c.coords!.lat, lng: c.coords!.lng, title: c.name, subtitle: c.address }));
     mapTitle = "Campuses on the map";
   } else if (selectedCampus) {
-    // Campus detail — show faculty buildings
     mapMarkers = selectedCampus.buildings
       .filter((b) => b.coords)
       .map((b) => ({ lat: b.coords!.lat, lng: b.coords!.lng, title: b.name, subtitle: b.address }));
@@ -53,7 +51,9 @@ const InstitutionDetail = () => {
     mapTitle = "Location";
   }
 
-
+  const galleryImages = institution.images && institution.images.length > 0
+    ? institution.images
+    : [institution.image].filter(Boolean);
 
   return (
     <div className="container py-4">
@@ -67,7 +67,7 @@ const InstitutionDetail = () => {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
         <div className="lg:col-span-2">
           <div className="rounded-xl overflow-hidden aspect-[16/9]">
-            <img src={institution.image} alt={institution.name} className="w-full h-full object-cover" />
+            <ImageGallery images={galleryImages} alt={institution.name} />
           </div>
         </div>
         <div className="flex flex-col justify-center">
@@ -95,125 +95,124 @@ const InstitutionDetail = () => {
         </div>
       )}
 
-
-
       {/* University: campus list first */}
       {hasCampuses && !selectedCampus && (
-        <div className="mb-10">
-          <h2 className="text-2xl font-bold mb-2">Choose a campus</h2>
-          <p className="text-muted-foreground mb-6">
-            Pick a campus to view its available seminar rooms and lecture halls.
-          </p>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div>
+          <h2 className="text-2xl font-bold mb-6">Campuses</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {institution.campuses!.map((campus) => {
-              const spaceCount = campus.buildings.reduce((sum, b) => sum + b.spaces.length, 0);
+              const totalRooms = campus.buildings.reduce((sum, b) => sum + b.spaces.length, 0);
               return (
-                <Link
-                  key={campus.id}
-                  to={`/institutions/${institution.id}?campus=${campus.id}`}
-                  className="bg-card border rounded-xl p-6 card-hover flex items-start gap-4"
-                >
-                  <div className="h-12 w-12 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
-                    <Building2 className="h-6 w-6" />
-                  </div>
+                <div key={campus.id} className="bg-card border rounded-xl p-6 flex flex-col justify-between">
                   <div>
-                    <h3 className="font-semibold text-lg mb-1">{campus.name}</h3>
-                    <p className="text-sm text-muted-foreground">
-                      {campus.buildings.length} {campus.buildings.length === 1 ? "faculty" : "faculties"} · {spaceCount} rooms
-                    </p>
+                    <h3 className="text-xl font-bold mb-1">{campus.name}</h3>
+                    {campus.address && (
+                      <p className="flex items-center gap-1 text-sm text-muted-foreground mb-4">
+                        <MapPin className="h-3.5 w-3.5" /> {campus.address}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground mb-6">
+                      <span className="flex items-center gap-1">
+                        <Building2 className="h-4 w-4" /> {campus.buildings.length} Buildings
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <DoorOpen className="h-4 w-4" /> {totalRooms} Spaces
+                      </span>
+                    </div>
                   </div>
-                </Link>
+                  <Button asChild className="w-full">
+                    <Link to={`/institutions/${institution.id}?campus=${campus.id}`}>
+                      View Faculty Buildings
+                    </Link>
+                  </Button>
+                </div>
               );
             })}
           </div>
         </div>
       )}
 
-      {/* University: selected campus drill-down */}
-      {hasCampuses && selectedCampus && (
-        <div className="mb-10">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold">{selectedCampus.name}</h2>
-            <Button variant="outline" size="sm" asChild>
+      {/* Campus detail view */}
+      {selectedCampus && (
+        <div>
+          <div className="flex items-center gap-4 mb-6">
+            <Button asChild variant="outline" size="sm">
               <Link to={`/institutions/${institution.id}`}>
-                <ArrowLeft className="h-4 w-4 mr-1.5" /> All campuses
+                <ArrowLeft className="h-4 w-4 mr-1" /> All Campuses
               </Link>
             </Button>
+            <div>
+              <h2 className="text-2xl font-bold">{selectedCampus.name}</h2>
+              {selectedCampus.address && (
+                <p className="text-sm text-muted-foreground flex items-center gap-1">
+                  <MapPin className="h-3.5 w-3.5" /> {selectedCampus.address}
+                </p>
+              )}
+            </div>
           </div>
-          {selectedCampus.buildings.map((building) => (
-            <div key={building.id} className="mb-8">
-              <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
-                <DoorOpen className="h-5 w-5 text-muted-foreground" />
-                {building.name}
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {building.spaces.map((space) => (
-                  <SpaceCard key={space.id} space={space} />
-                ))}
-              </div>
-            </div>
-          ))}
+          <BuildingList buildings={selectedCampus.buildings} institutionId={institution.id} />
         </div>
       )}
 
-      {/* Non-university: buildings */}
+      {/* Non-university institutions: buildings and rooms */}
       {!hasCampuses && institution.buildings.length > 0 && (
-        <div>
-          <h2 className="text-2xl font-bold mb-6">Available Spaces</h2>
-          {institution.buildings.map((building) => (
-            <div key={building.id} className="mb-8">
-              <h3 className="text-lg font-medium mb-4 flex items-center gap-2">
-                <DoorOpen className="h-5 w-5 text-muted-foreground" />
-                {building.name}
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {building.spaces.map((space) => (
-                  <SpaceCard key={space.id} space={space} />
-                ))}
-              </div>
-            </div>
-          ))}
-        </div>
+        <BuildingList buildings={institution.buildings} institutionId={institution.id} />
       )}
     </div>
   );
 };
 
-const SpaceCard = ({ space }: { space: Space }) => {
-  const unitShort = space.priceUnit === "night" ? "night" : space.priceUnit === "month" ? "mo" : "hr";
-  return (
-    <div className="bg-card rounded-lg border overflow-hidden card-hover">
-      <div className="aspect-[16/10] overflow-hidden">
-        <img src={space.image} alt={space.name} className="w-full h-full object-cover" />
-      </div>
-      <div className="p-4">
-        <h4 className="font-semibold mb-1">{space.name}</h4>
-        <p className="text-sm text-muted-foreground flex items-center gap-1 mb-2">
-          <Users className="h-3.5 w-3.5" /> Capacity: {space.capacity}
-        </p>
-        <div className="flex flex-wrap gap-1.5 mb-3">
-          {space.features.slice(0, 3).map((f) => (
-            <span key={f} className="text-xs bg-secondary text-secondary-foreground px-2 py-0.5 rounded-full">{f}</span>
+const BuildingList = ({ buildings, institutionId }: { buildings: { id: string; name: string; address?: string; spaces: Space[] }[]; institutionId: string }) => (
+  <div className="space-y-8">
+    {buildings.map((building) => (
+      <div key={building.id}>
+        <div className="flex items-center gap-2 mb-4">
+          <Building2 className="h-5 w-5 text-primary" />
+          <h3 className="text-xl font-bold">{building.name}</h3>
+          {building.address && (
+            <span className="text-sm text-muted-foreground flex items-center gap-1 ml-2">
+              <MapPin className="h-3.5 w-3.5" /> {building.address}
+            </span>
+          )}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+          {building.spaces.map((space) => (
+            <div key={space.id} className="bg-card border rounded-lg overflow-hidden card-hover flex flex-col">
+              <div className="aspect-[16/10] overflow-hidden">
+                <img src={space.image} alt={space.name} className="w-full h-full object-cover transition-transform duration-300 hover:scale-105" />
+              </div>
+              <div className="p-4 flex flex-col flex-1">
+                <h4 className="font-bold text-base mb-1">{space.name}</h4>
+                <div className="flex items-center gap-3 text-xs text-muted-foreground mb-3">
+                  <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {space.capacity}</span>
+                  <span className="font-semibold text-foreground">
+                    {space.pricePerHour === 0 ? "Free" : `${space.pricePerHour.toLocaleString()} HUF / ${space.priceUnit || "hour"}`}
+                  </span>
+                </div>
+                <div className="flex flex-wrap gap-1 mb-4">
+                  {space.features.slice(0, 3).map((f) => (
+                    <span key={f} className="text-[10px] bg-secondary px-2 py-0.5 rounded-full text-muted-foreground">{f}</span>
+                  ))}
+                  {space.features.length > 3 && (
+                    <span className="text-[10px] text-muted-foreground">+{space.features.length - 3}</span>
+                  )}
+                </div>
+                <div className="mt-auto">
+                  {space.available ? (
+                    <Button asChild className="w-full" size="sm">
+                      <Link to={`/spaces/${space.id}`}>Book Now</Link>
+                    </Button>
+                  ) : (
+                    <Button className="w-full" size="sm" disabled variant="secondary">Unavailable</Button>
+                  )}
+                </div>
+              </div>
+            </div>
           ))}
-          {space.features.length > 3 && (
-            <span className="text-xs text-muted-foreground">+{space.features.length - 3}</span>
-          )}
-        </div>
-        <div className="flex items-center justify-between">
-          <span className="font-bold text-primary">
-            {space.pricePerHour === 0 ? "Free" : `${space.pricePerHour.toLocaleString()} HUF/${unitShort}`}
-          </span>
-          {space.available ? (
-            <Button size="sm" asChild>
-              <Link to={`/spaces/${space.id}`}>Book Now</Link>
-            </Button>
-          ) : (
-            <Button size="sm" disabled>Unavailable</Button>
-          )}
         </div>
       </div>
-    </div>
-  );
-};
+    ))}
+  </div>
+);
 
 export default InstitutionDetail;

@@ -5,7 +5,7 @@ import hotelDivinusAsset from "@/assets/hotel-divinus.png.asset.json";
 
 export type SaveMode = "db" | "local";
 export type InstitutionPatch = Partial<
-  Pick<Institution, "name" | "description" | "city" | "rating" | "image" | "address">
+  Pick<Institution, "name" | "description" | "city" | "rating" | "image" | "images" | "address">
 >;
 
 interface InstitutionsContextValue {
@@ -22,11 +22,17 @@ interface InstitutionsContextValue {
 }
 
 export type StructureTable = "campuses" | "buildings" | "spaces";
-const NOT_SAVED = "Not saved — the database refused the change. Sign in with a real admin account (demo roles can't write to the database).";
+const NOT_SAVED = "Not saved — database refused the change.";
 
 export interface NewInstitution {
-  name: string; type: string; city: string; description?: string;
-  address?: string; image?: string; rating?: number;
+  name: string;
+  type: string;
+  city: string;
+  description?: string;
+  address?: string;
+  image?: string;
+  images?: string[];
+  rating?: number;
 }
 
 const Ctx = createContext<InstitutionsContextValue | null>(null);
@@ -42,11 +48,18 @@ const loadOverrides = (): Record<string, InstitutionPatch> => {
 };
 
 function transformDbSpace(s: any): Space {
+  const rawImages: string[] = Array.isArray(s.images) && s.images.length > 0
+    ? s.images
+    : (Array.isArray(s.image_urls) && s.image_urls.length > 0 ? s.image_urls : []);
+  const mainImage = rawImages[0] || s.image_url || "";
+  const images = rawImages.length > 0 ? rawImages : (mainImage ? [mainImage] : []);
+
   return {
     id: s.id,
     name: s.name,
     capacity: s.capacity ?? 1,
-    image: s.image_url ?? "",
+    image: mainImage,
+    images,
     features: s.features ?? [],
     pricePerHour: s.price_per_unit ?? 0,
     priceUnit: s.price_unit ?? "hour",
@@ -76,14 +89,23 @@ function transformDbCampus(c: any): Campus {
 
 function transformDbInstitution(inst: any, campuses: Campus[] = [], buildings: Building[] = []): Institution {
   const isHotelDivinus = inst.name === "Hotel Divinus Debrecen";
+  const rawImages: string[] = Array.isArray(inst.images) && inst.images.length > 0
+    ? inst.images
+    : (Array.isArray(inst.image_urls) && inst.image_urls.length > 0 ? inst.image_urls : []);
+
+  // Use uploaded images first; only fallback to the asset if no custom images were uploaded
+  const mainImage = rawImages[0] || inst.image_url || (isHotelDivinus ? hotelDivinusAsset.url : "");
+  const images = rawImages.length > 0 ? rawImages : (mainImage ? [mainImage] : []);
+
   return {
     id: inst.id,
     name: inst.name,
     type: inst.type,
     city: inst.city,
     description: inst.description || "",
-    image: isHotelDivinus ? hotelDivinusAsset.url : inst.image_url || "",
-    rating: isHotelDivinus ? 5 : inst.rating ?? 0,
+    image: mainImage,
+    images,
+    rating: isHotelDivinus ? (inst.rating ?? 5) : (inst.rating ?? 0),
     coords: inst.lat && inst.lng ? { lat: Number(inst.lat), lng: Number(inst.lng) } : undefined,
     address: inst.address || undefined,
     campuses: campuses.length > 0 ? campuses : undefined,
@@ -112,7 +134,6 @@ export const InstitutionsProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => { localStorage.setItem(CREATED_KEY, JSON.stringify(localCreated)); }, [localCreated]);
   useEffect(() => { localStorage.setItem(DELETED_KEY, JSON.stringify(localDeleted)); }, [localDeleted]);
 
-  // Fetch from Supabase on mount
   useEffect(() => {
     let cancelled = false;
 
@@ -177,6 +198,12 @@ export const InstitutionsProvider = ({ children }: { children: ReactNode }) => {
     if (p.description !== undefined) r.description = p.description;
     if (p.address !== undefined) r.address = p.address || null;
     if (p.image !== undefined) r.image_url = p.image || null;
+    if (p.images !== undefined) {
+      r.images = p.images;
+      if (p.images.length > 0) {
+        r.image_url = p.images[0];
+      }
+    }
     if (p.rating !== undefined) r.rating = p.rating;
     return r;
   };
@@ -195,16 +222,18 @@ export const InstitutionsProvider = ({ children }: { children: ReactNode }) => {
     overrides,
     usingDatabase,
     getById: (id) => institutions.find((i) => i.id === id),
-    // Saves to the database when possible; if the row is demo data, or the
-    // database refuses the change (e.g. demo-role session), it is saved
-    // locally so the edit is never silently lost.
     updateInstitution: async (id, patch) => {
       if (id.startsWith("local-")) {
         setLocalCreated((prev) => prev.map((i) => (i.id === id ? { ...i, ...patch } : i)));
         return "local";
       }
       if (isDbRow(id)) {
-        const { data, error } = await supabase.from("institutions").update(toRow(patch) as any).eq("id", id).select("id");
+        const row = toRow(patch);
+        const { data, error } = await supabase
+          .from("institutions")
+          .update(row as any)
+          .eq("id", id)
+          .select("id");
         if (!error && data && data.length > 0) {
           setReloadKey((k) => k + 1);
           return "db";
@@ -215,12 +244,18 @@ export const InstitutionsProvider = ({ children }: { children: ReactNode }) => {
     },
     createInstitution: async (data) => {
       if (usingDatabase) {
-        const { data: rows, error } = await supabase.from("institutions").insert(toRow(data) as any).select("id");
+        const { data: rows, error } = await supabase
+          .from("institutions")
+          .insert(toRow(data) as any)
+          .select("id");
         if (!error && rows && rows.length > 0) {
           setReloadKey((k) => k + 1);
           return "db";
         }
       }
+      const imagesList = data.images && data.images.length > 0
+        ? data.images
+        : (data.image ? [data.image] : []);
       const inst: Institution = {
         id: `local-${Date.now()}`,
         name: data.name,
@@ -228,7 +263,8 @@ export const InstitutionsProvider = ({ children }: { children: ReactNode }) => {
         city: data.city,
         description: data.description || "",
         address: data.address || undefined,
-        image: data.image || "",
+        image: imagesList[0] || data.image || "",
+        images: imagesList,
         rating: data.rating ?? 0,
         buildings: [],
       };

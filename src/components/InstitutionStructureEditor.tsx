@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import ImageDrop from "@/components/ImageDrop";
+import MultiImageDrop from "@/components/MultiImageDrop";
 import { useInstitutions, type StructureTable } from "@/contexts/InstitutionsContext";
 import type { Institution } from "@/data/mockData";
 import { toast } from "@/hooks/use-toast";
@@ -28,7 +28,6 @@ export function structureLists(institution: Institution) {
   return { campuses, buildings, rooms };
 }
 
-/** Add / edit / delete campuses, buildings and rooms of one institution. */
 export default function InstitutionStructureEditor({ institution, tab: fixedTab }: { institution: Institution; tab?: StructureTab }) {
   const { saveRow, deleteRow } = useInstitutions();
   const [ownTab, setOwnTab] = useState<StructureTab>("rooms");
@@ -46,7 +45,21 @@ export default function InstitutionStructureEditor({ institution, tab: fixedTab 
     if (tab === "buildings") setEditing({ table: "buildings", id: null, form: { name: "", address: "", campus_id: campuses[0]?.id ?? "" } });
     if (tab === "rooms") {
       if (!buildings.length) { toast({ title: "Add a building first", variant: "destructive" }); return; }
-      setEditing({ table: "spaces", id: null, form: { name: "", building_id: buildings[0].id, capacity: 10, price_per_unit: 0, price_unit: "hour", features: "", image_url: "", is_active: true } });
+      setEditing({
+        table: "spaces",
+        id: null,
+        form: {
+          name: "",
+          building_id: buildings[0].id,
+          capacity: 10,
+          price_per_unit: 0,
+          price_unit: "hour",
+          features: "",
+          image_url: "",
+          images: [],
+          is_active: true,
+        },
+      });
     }
   };
 
@@ -55,14 +68,25 @@ export default function InstitutionStructureEditor({ institution, tab: fixedTab 
     const f = editing.form;
     if (!String(f.name || "").trim()) { toast({ title: "Name is required", variant: "destructive" }); return; }
     let row: Record<string, unknown>;
-    if (editing.table === "campuses") row = { name: f.name, address: f.address || null, institution_id: institution.id };
-    else if (editing.table === "buildings") row = { name: f.name, address: f.address || null, campus_id: f.campus_id || null, institution_id: institution.id };
-    else row = {
-      name: f.name, building_id: f.building_id, capacity: Number(f.capacity) || 1,
-      price_per_unit: Number(f.price_per_unit) || 0, price_unit: f.price_unit,
-      features: String(f.features || "").split(",").map((x) => x.trim()).filter(Boolean),
-      image_url: f.image_url || null, is_active: !!f.is_active,
-    };
+    if (editing.table === "campuses") {
+      row = { name: f.name, address: f.address || null, institution_id: institution.id };
+    } else if (editing.table === "buildings") {
+      row = { name: f.name, address: f.address || null, campus_id: f.campus_id || null, institution_id: institution.id };
+    } else {
+      const imagesArr: string[] = Array.isArray(f.images) && f.images.length > 0 ? f.images : (f.image_url ? [f.image_url] : []);
+      const cover = imagesArr[0] || f.image_url || null;
+      row = {
+        name: f.name,
+        building_id: f.building_id,
+        capacity: Number(f.capacity) || 1,
+        price_per_unit: Number(f.price_per_unit) || 0,
+        price_unit: f.price_unit,
+        features: String(f.features || "").split(",").map((x) => x.trim()).filter(Boolean),
+        image_url: cover,
+        images: imagesArr,
+        is_active: !!f.is_active,
+      };
+    }
     setSaving(true);
     try {
       await saveRow(editing.table, editing.id, row);
@@ -70,13 +94,19 @@ export default function InstitutionStructureEditor({ institution, tab: fixedTab 
       setEditing(null);
     } catch (e: any) {
       toast({ title: "Could not save", description: e.message, variant: "destructive" });
-    } finally { setSaving(false); }
+    } finally {
+      setSaving(false);
+    }
   };
 
   const remove = async (table: StructureTable, id: string, name: string) => {
     if (!confirm(`Delete ${name}?`)) return;
-    try { await deleteRow(table, id); toast({ title: "Deleted", description: name }); }
-    catch (e: any) { toast({ title: "Could not delete", description: e.message, variant: "destructive" }); }
+    try {
+      await deleteRow(table, id);
+      toast({ title: "Deleted", description: name });
+    } catch (e: any) {
+      toast({ title: "Could not delete", description: e.message, variant: "destructive" });
+    }
   };
 
   const set = (k: string, v: any) => setEditing((e) => (e ? { ...e, form: { ...e.form, [k]: v } } : e));
@@ -121,7 +151,17 @@ export default function InstitutionStructureEditor({ institution, tab: fixedTab 
                   <input type="checkbox" checked={!!f.is_active} onChange={(e) => set("is_active", e.target.checked)} /> Available
                 </label>
               </Field>
-              <div className="md:col-span-2"><Field label="Photo"><ImageDrop value={f.image_url || ""} onChange={(v) => set("image_url", v)} /></Field></div>
+              <div className="md:col-span-2">
+                <Field label="Photos (first photo is used as main cover)">
+                  <MultiImageDrop
+                    values={f.images || []}
+                    onChange={(urls) => {
+                      set("images", urls);
+                      set("image_url", urls[0] || "");
+                    }}
+                  />
+                </Field>
+              </div>
             </>
           )}
         </div>
@@ -153,56 +193,67 @@ export default function InstitutionStructureEditor({ institution, tab: fixedTab 
         </div>
       )}
       <div className="bg-card border rounded-xl p-6">
-          {isDemo && (
-            <p className="text-sm mb-4 p-3 rounded-lg bg-amber-500/10 text-amber-700">
-              This is demo data that isn't in the database, so changes can't be saved here.
-            </p>
-          )}
-          <div className="flex items-center justify-between mb-4 gap-3">
-            <Input placeholder={`Search ${tab}...`} className="max-w-sm" value={search} onChange={(e) => setSearch(e.target.value)} />
-            <Button size="sm" onClick={startAdd}><Plus className="h-4 w-4 mr-1" /> Add new</Button>
-          </div>
-          {EditPanel()}
-          <div className="space-y-2">
-            {tab === "campuses" && campuses.length === 0 && <p className="text-sm text-muted-foreground p-3">No campuses yet.</p>}
-            {tab === "campuses" && campuses.filter((c) => match(c.name)).map((c) => (
-              <div key={c.id} className="flex items-center justify-between p-3 border rounded-lg">
-                <div><p className="font-medium">{c.name}</p><p className="text-xs text-muted-foreground">{c.buildings.length} buildings{c.address ? ` · ${c.address}` : ""}</p></div>
-                <RowActions
-                  onEdit={() => setEditing({ table: "campuses", id: c.id, form: { name: c.name, address: c.address || "" } })}
-                  onDelete={() => remove("campuses", c.id, c.name)}
-                />
-              </div>
-            ))}
-            {tab === "buildings" && buildings.filter((b) => match(b.name)).map((b) => (
-              <div key={b.id} className="flex items-center justify-between p-3 border rounded-lg">
-                <div><p className="font-medium">{b.name}</p><p className="text-xs text-muted-foreground">{b.spaces.length} rooms{b.campus ? ` · ${b.campus}` : ""}</p></div>
-                <RowActions
-                  onEdit={() => setEditing({ table: "buildings", id: b.id, form: { name: b.name, address: b.address || "", campus_id: b.campusId || "" } })}
-                  onDelete={() => remove("buildings", b.id, b.name)}
-                />
-              </div>
-            ))}
-            {tab === "rooms" && rooms.filter((s) => match(s.name)).map((s) => (
-              <div key={s.id} className="flex items-center justify-between p-3 border rounded-lg">
-                <div className="flex items-center gap-3 min-w-0">
-                  {s.image && <img src={s.image} alt="" className="h-10 w-10 rounded object-cover shrink-0" />}
-                  <div className="min-w-0"><p className="font-medium truncate">{s.name}</p><p className="text-xs text-muted-foreground">{s.building} · cap. {s.capacity}</p></div>
-                </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <span className={`text-xs px-2 py-0.5 rounded-full ${s.available ? "status-confirmed" : "status-cancelled"}`}>{s.available ? "Available" : "Unavailable"}</span>
-                  <RowActions
-                    onEdit={() => setEditing({ table: "spaces", id: s.id, form: {
-                      name: s.name, building_id: s.buildingId, capacity: s.capacity, price_per_unit: s.pricePerHour,
-                      price_unit: s.priceUnit || "hour", features: s.features.join(", "), image_url: s.image, is_active: s.available,
-                    } })}
-                    onDelete={() => remove("spaces", s.id, s.name)}
-                  />
-                </div>
-              </div>
-            ))}
-          </div>
+        {isDemo && (
+          <p className="text-sm mb-4 p-3 rounded-lg bg-amber-500/10 text-amber-700">
+            This is demo data that isn't in the database, so changes can't be saved here.
+          </p>
+        )}
+        <div className="flex items-center justify-between mb-4 gap-3">
+          <Input placeholder={`Search ${tab}...`} className="max-w-sm" value={search} onChange={(e) => setSearch(e.target.value)} />
+          <Button size="sm" onClick={startAdd}><Plus className="h-4 w-4 mr-1" /> Add new</Button>
         </div>
+        {EditPanel()}
+        <div className="space-y-2">
+          {tab === "campuses" && campuses.length === 0 && <p className="text-sm text-muted-foreground p-3">No campuses yet.</p>}
+          {tab === "campuses" && campuses.filter((c) => match(c.name)).map((c) => (
+            <div key={c.id} className="flex items-center justify-between p-3 border rounded-lg">
+              <div><p className="font-medium">{c.name}</p><p className="text-xs text-muted-foreground">{c.buildings.length} buildings{c.address ? ` · ${c.address}` : ""}</p></div>
+              <RowActions
+                onEdit={() => setEditing({ table: "campuses", id: c.id, form: { name: c.name, address: c.address || "" } })}
+                onDelete={() => remove("campuses", c.id, c.name)}
+              />
+            </div>
+          ))}
+          {tab === "buildings" && buildings.filter((b) => match(b.name)).map((b) => (
+            <div key={b.id} className="flex items-center justify-between p-3 border rounded-lg">
+              <div><p className="font-medium">{b.name}</p><p className="text-xs text-muted-foreground">{b.spaces.length} rooms{b.campus ? ` · ${b.campus}` : ""}</p></div>
+              <RowActions
+                onEdit={() => setEditing({ table: "buildings", id: b.id, form: { name: b.name, address: b.address || "", campus_id: b.campusId || "" } })}
+                onDelete={() => remove("buildings", b.id, b.name)}
+              />
+            </div>
+          ))}
+          {tab === "rooms" && rooms.filter((s) => match(s.name)).map((s) => (
+            <div key={s.id} className="flex items-center justify-between p-3 border rounded-lg">
+              <div className="flex items-center gap-3 min-w-0">
+                {s.image && <img src={s.image} alt="" className="h-10 w-10 rounded object-cover shrink-0" />}
+                <div className="min-w-0"><p className="font-medium truncate">{s.name}</p><p className="text-xs text-muted-foreground">{s.building} · cap. {s.capacity}</p></div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className={`text-xs px-2 py-0.5 rounded-full ${s.available ? "status-confirmed" : "status-cancelled"}`}>{s.available ? "Available" : "Unavailable"}</span>
+                <RowActions
+                  onEdit={() => setEditing({
+                    table: "spaces",
+                    id: s.id,
+                    form: {
+                      name: s.name,
+                      building_id: s.buildingId,
+                      capacity: s.capacity,
+                      price_per_unit: s.pricePerHour,
+                      price_unit: s.priceUnit || "hour",
+                      features: Array.isArray(s.features) ? s.features.join(", ") : "",
+                      image_url: s.image,
+                      images: s.images && s.images.length > 0 ? s.images : (s.image ? [s.image] : []),
+                      is_active: s.available,
+                    },
+                  })}
+                  onDelete={() => remove("spaces", s.id, s.name)}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
