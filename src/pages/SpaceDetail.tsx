@@ -1,6 +1,6 @@
-import { useParams, useNavigate } from "react-router-dom";
-import { Users, Check, Clock, DollarSign } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import { Users, Check, Clock, DollarSign, Wallet } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,6 +12,7 @@ import { toast } from "@/hooks/use-toast";
 import { useAuth, isUniversityUserRole } from "@/contexts/AuthContext";
 import { useBookings } from "@/contexts/BookingsContext";
 import { useInstitutions } from "@/contexts/InstitutionsContext";
+import { supabase } from "@/integrations/supabase/client";
 
 const SpaceDetail = () => {
   const { spaceId } = useParams<{ spaceId: string }>();
@@ -39,9 +40,29 @@ const SpaceDetail = () => {
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
   const [units, setUnits] = useState<number>(1);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+
+  // Fetch real user's wallet balance
+  useEffect(() => {
+    if (!user || user.isDemo) return;
+    const fetchBalance = async () => {
+      const { data } = await (supabase as any)
+        .from("wallets")
+        .select("balance")
+        .eq("owner_type", "user")
+        .eq("owner_id", user.id)
+        .maybeSingle();
+      if (data) setWalletBalance(Number(data.balance ?? 0));
+    };
+    void fetchBalance();
+  }, [user]);
 
   if (!result) {
-    return <div className="container py-20 text-center"><p className="text-lg text-muted-foreground">Space not found.</p></div>;
+    return (
+      <div className="container py-20 text-center">
+        <p className="text-lg text-muted-foreground">Space not found.</p>
+      </div>
+    );
   }
 
   const { space, building, institution, campus } = result;
@@ -102,6 +123,19 @@ const SpaceDetail = () => {
         return;
       }
     }
+
+    // Check wallet balance for paid bookings
+    if (!isFreeAndInstant && totalPrice > 0 && walletBalance !== null) {
+      if (walletBalance < totalPrice) {
+        toast({
+          title: "Insufficient wallet balance",
+          description: `This booking requires ${totalPrice.toLocaleString()} HUF, but your wallet only has ${walletBalance.toLocaleString()} HUF. Please top up your wallet.`,
+          variant: "destructive",
+        });
+        return;
+      }
+    }
+
     const durationLabel =
       unit === "hour"
         ? `${bookStart}–${bookEnd}`
@@ -125,10 +159,12 @@ const SpaceDetail = () => {
       },
       { autoApprove: isFreeAndInstant, free: isFreeAndInstant }
     );
+
     if (!res.ok) {
       toast({ title: "Booking conflict", description: res.error, variant: "destructive" });
       return;
     }
+
     toast({
       title: isFreeAndInstant ? "Booking confirmed!" : "Booking submitted!",
       description: isFreeAndInstant
@@ -138,13 +174,21 @@ const SpaceDetail = () => {
     navigate("/my-bookings");
   };
 
-  const priceLabel = effectivePrice === 0
-    ? "Free"
-    : `${effectivePrice.toLocaleString()} HUF / ${priceUnitLabel[unit]}`;
+  const priceLabel =
+    effectivePrice === 0
+      ? "Free"
+      : `${effectivePrice.toLocaleString()} HUF / ${priceUnitLabel[unit]}`;
 
-  const spaceGalleryImages = space.images && space.images.length > 0
-    ? space.images
-    : [space.image].filter(Boolean);
+  const spaceGalleryImages =
+    space.images && space.images.length > 0
+      ? space.images
+      : [space.image].filter(Boolean);
+
+  const isInsufficient =
+    !isFreeAndInstant &&
+    totalPrice > 0 &&
+    walletBalance !== null &&
+    walletBalance < totalPrice;
 
   return (
     <div className="container py-4">
@@ -243,17 +287,44 @@ const SpaceDetail = () => {
               )}
 
               {effectivePrice > 0 && totalPrice > 0 && (
-                <div className="rounded-lg bg-secondary/60 px-3 py-2 text-sm flex items-center justify-between">
-                  <span className="text-muted-foreground">Estimated total</span>
-                  <span className="font-bold">{totalPrice.toLocaleString()} HUF</span>
+                <div className="space-y-1.5">
+                  <div className="rounded-lg bg-secondary/60 px-3 py-2 text-sm flex items-center justify-between">
+                    <span className="text-muted-foreground">Estimated total</span>
+                    <span className="font-bold">{totalPrice.toLocaleString()} HUF</span>
+                  </div>
+                  {walletBalance !== null && (
+                    <div className="flex items-center justify-between text-xs px-1 text-muted-foreground">
+                      <span className="flex items-center gap-1">
+                        <Wallet className="h-3.5 w-3.5" /> Balance: {walletBalance.toLocaleString()} HUF
+                      </span>
+                      {isInsufficient && (
+                        <Link to="/wallet" className="text-destructive font-medium hover:underline">
+                          Top up required →
+                        </Link>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
-              <Button type="submit" className="w-full" size="lg" disabled={!space.available}>
-                {!space.available ? "Currently Unavailable" : isFreeAndInstant ? "Book Instantly (Free)" : "Submit Booking Request"}
+              <Button
+                type="submit"
+                className="w-full"
+                size="lg"
+                disabled={!space.available || isInsufficient}
+              >
+                {!space.available
+                  ? "Currently Unavailable"
+                  : isInsufficient
+                  ? "Insufficient Balance"
+                  : isFreeAndInstant
+                  ? "Book Instantly (Free)"
+                  : "Submit Booking Request"}
               </Button>
               <p className="text-xs text-muted-foreground text-center">
-                {isFreeAndInstant ? "Confirmed immediately for university members." : "Bookings require approval from the institution."}
+                {isFreeAndInstant
+                  ? "Confirmed immediately for university members."
+                  : "Bookings require approval from the institution."}
               </p>
             </form>
           </div>
