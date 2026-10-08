@@ -24,6 +24,7 @@ import Wallet from "./pages/Wallet";
 import AddCard from "./pages/AddCard";
 import Signup from "./pages/auth/Signup";
 import SignupUser from "./pages/auth/SignupUser";
+import SignupTeacher from "./pages/auth/SignupTeacher";
 import SignupInstitution from "./pages/auth/SignupInstitution";
 import SignupSuperAdmin from "./pages/auth/SignupSuperAdmin";
 import Verify from "./pages/auth/Verify";
@@ -65,6 +66,11 @@ export function AppShell() {
                   <Route path="/admin/institutions/:id/edit" element={<InstitutionEditPage />} />
                   <Route path="/auth/signup" element={<Signup />} />
                   <Route path="/auth/signup/user" element={<SignupUser />} />
+                  <Route path="/auth/signup" element={<Signup />} />
+                  <Route path="/auth/signup/user" element={<SignupUser />} />
+                  <Route path="/auth/signup/teacher" element={<SignupTeacher />} />
+                  <Route path="/auth/signup/institution" element={<SignupInstitution />} />
+
                   <Route path="/auth/signup/institution" element={<SignupInstitution />} />
                   <Route path="/auth/signup/super-admin" element={<SignupSuperAdmin />} />
                   <Route path="/auth/verify" element={<Verify />} />
