@@ -237,7 +237,21 @@ export const BookingsProvider = ({ children }: { children: ReactNode }) => {
       if (status === "approved") {
         const targetBooking = bookings.find((b) => b.id === id);
         const price = 25000;
-        const commissionPct = 15;
+
+        // Determine institution type and commission rate:
+        const instMeta = institutions.find((i) => i.id === targetBooking?.institutionId);
+        const instType = instMeta?.type || "other";
+
+        const commissionRates: Record<string, number> = {
+          hotel: 15,
+          airbnb: 15,
+          sports: 10,
+          university: 10,
+          garden: 5,
+          other: 10,
+        };
+        const commissionPct = commissionRates[instType] ?? 10;
+
         const platformCut = Math.round((price * commissionPct) / 100);
         const instCut = price - platformCut;
         const instId = targetBooking?.institutionId || "inst-1";
@@ -266,7 +280,7 @@ export const BookingsProvider = ({ children }: { children: ReactNode }) => {
             direction: "credit",
             kind: "payout",
             note: `Booking payout after ${commissionPct}% commission`,
-            institution_type: null,
+            institution_type: instType,
             created_at: new Date().toISOString(),
           },
           {
@@ -276,13 +290,13 @@ export const BookingsProvider = ({ children }: { children: ReactNode }) => {
             amount: platformCut,
             direction: "credit",
             kind: "commission",
-            note: `${commissionPct}% platform commission`,
-            institution_type: null,
+            note: `${commissionPct}% commission (${instType})`,
+            institution_type: instType,
             created_at: new Date().toISOString(),
           }
         );
         localStorage.setItem(DEMO_TXS_KEY, JSON.stringify(allTxs));
-        toast({ title: "Booking approved & payout credited to institution wallet!" });
+        toast({ title: `Booking approved · ${commissionPct}% commission credited to Super Admin!` });
       }
       return;
     }
