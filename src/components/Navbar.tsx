@@ -1,9 +1,28 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Building2, CalendarDays, LayoutDashboard, Menu, X, LogIn, LogOut, ShieldCheck, MapPin, User as UserIcon } from "lucide-react";
+import {
+  Building2,
+  CalendarDays,
+  LayoutDashboard,
+  Menu,
+  X,
+  LogIn,
+  LogOut,
+  ShieldCheck,
+  MapPin,
+  GraduationCap,
+  User as UserIcon,
+} from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useAuth, roleLabel, roleBadgeClass } from "@/contexts/AuthContext";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+  DropdownMenuSeparator,
+  DropdownMenuLabel,
+} from "@/components/ui/dropdown-menu";
 
 const baseLinks = [
   { to: "/", label: "Home" },
@@ -22,10 +41,16 @@ const Navbar = () => {
     links.push({ to: "/wallet", label: "Wallet" });
   }
 
-  const adminLink = user?.canSuperAdmin ? { to: "/admin/super", label: "Super Admin", icon: ShieldCheck }
-    : user?.role === "super_admin" ? { to: "/admin/super", label: "Super Admin", icon: ShieldCheck }
-    : user?.role === "institution_admin" || user?.role === "institution_pending" ? { to: "/admin/institution", label: "Institution", icon: Building2 }
-    : user?.role === "campus_admin" ? { to: "/admin/campus", label: "Campus", icon: MapPin }
+  const adminLink = user?.canSuperAdmin
+    ? { to: "/admin/super", label: "Super Admin", icon: ShieldCheck }
+    : user?.role === "super_admin"
+    ? { to: "/admin/super", label: "Super Admin", icon: ShieldCheck }
+    : user?.role === "institution_admin" || user?.role === "institution_pending"
+    ? { to: "/admin/institution", label: "Institution", icon: Building2 }
+    : user?.role === "campus_admin"
+    ? { to: "/admin/campus", label: "Campus", icon: MapPin }
+    : user?.role === "teacher"
+    ? { to: "/admin/teacher", label: "Teacher Portal", icon: GraduationCap }
     : null;
 
   return (
@@ -42,7 +67,9 @@ const Navbar = () => {
               key={link.to}
               to={link.to}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                location.pathname === link.to ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                location.pathname === link.to
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
               }`}
             >
               {link.label}
@@ -52,7 +79,9 @@ const Navbar = () => {
             <Link
               to={adminLink.to}
               className={`px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-1.5 transition-colors ${
-                location.pathname === adminLink.to ? "bg-primary/10 text-primary" : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                location.pathname === adminLink.to
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:text-foreground hover:bg-secondary"
               }`}
             >
               <adminLink.icon className="h-4 w-4" />
@@ -67,7 +96,11 @@ const Navbar = () => {
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-2">
                   <UserIcon className="h-4 w-4" /> {user.name}
-                  <span className={`hidden lg:inline text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${roleBadgeClass[user.role]}`}>
+                  <span
+                    className={`hidden lg:inline text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${
+                      roleBadgeClass[user.role]
+                    }`}
+                  >
                     {roleLabel[user.role]}
                   </span>
                 </Button>
@@ -79,49 +112,65 @@ const Navbar = () => {
                   <p className="text-xs text-primary font-normal mt-0.5">{roleLabel[user.role]}</p>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate("/my-bookings")}><CalendarDays className="h-4 w-4 mr-2" /> My Bookings</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate("/account")}><UserIcon className="h-4 w-4 mr-2" /> Account settings</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => { logout(); navigate("/"); }}><LogOut className="h-4 w-4 mr-2" /> Log out</DropdownMenuItem>
-
+                <DropdownMenuItem onClick={() => navigate("/account")}>
+                  Account Settings
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/wallet")}>
+                  My Wallet
+                </DropdownMenuItem>
+                {adminLink && (
+                  <DropdownMenuItem onClick={() => navigate(adminLink.to)}>
+                    {adminLink.label}
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => void logout()} className="text-destructive">
+                  <LogOut className="h-4 w-4 mr-2" /> Sign Out
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <>
-              <Button variant="ghost" size="sm" onClick={() => navigate("/auth/login")}><LogIn className="h-4 w-4 mr-1" /> Log in</Button>
-              <Button size="sm" onClick={() => navigate("/auth/signup")}>Sign up</Button>
-            </>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={() => navigate("/auth/login")}>
+                Sign In
+              </Button>
+              <Button size="sm" onClick={() => navigate("/auth/signup")}>
+                Sign Up
+              </Button>
+            </div>
           )}
         </div>
 
-        <Button aria-label={mobileOpen ? "Close menu" : "Open menu"} variant="ghost" size="icon" className="shrink-0 md:hidden" onClick={() => setMobileOpen(!mobileOpen)}>
-          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </Button>
+        {/* Mobile menu toggle */}
+        <div className="md:hidden flex items-center gap-2">
+          <Button variant="ghost" size="icon" onClick={() => setMobileOpen(!mobileOpen)}>
+            {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+          </Button>
+        </div>
       </div>
 
       {mobileOpen && (
-        <nav className="container flex flex-col gap-1 border-t bg-card py-4 md:hidden">
+        <div className="md:hidden border-t p-4 bg-card space-y-2">
           {links.map((link) => (
-            <Link key={link.to} to={link.to} onClick={() => setMobileOpen(false)}
-              className={`px-4 py-3 rounded-lg text-sm font-medium ${location.pathname === link.to ? "bg-primary/10 text-primary" : "text-muted-foreground"}`}>
+            <Link
+              key={link.to}
+              to={link.to}
+              onClick={() => setMobileOpen(false)}
+              className="block px-3 py-2 rounded-md text-base font-medium text-foreground hover:bg-secondary"
+            >
               {link.label}
             </Link>
           ))}
           {adminLink && (
-            <Link to={adminLink.to} onClick={() => setMobileOpen(false)} className="px-4 py-3 rounded-lg text-sm font-medium text-muted-foreground flex items-center gap-2">
+            <Link
+              to={adminLink.to}
+              onClick={() => setMobileOpen(false)}
+              className="flex items-center gap-2 px-3 py-2 rounded-md text-base font-medium text-primary hover:bg-secondary"
+            >
               <adminLink.icon className="h-4 w-4" /> {adminLink.label}
             </Link>
           )}
-          <div className="border-t mt-2 pt-2 flex flex-col gap-1">
-            {user ? (
-              <Button variant="outline" size="sm" onClick={() => { logout(); setMobileOpen(false); }}>Log out ({user.name})</Button>
-            ) : (
-              <>
-                <Button variant="ghost" size="sm" onClick={() => { navigate("/auth/login"); setMobileOpen(false); }}>Log in</Button>
-                <Button size="sm" onClick={() => { navigate("/auth/signup"); setMobileOpen(false); }}>Sign up</Button>
-              </>
-            )}
-          </div>
-        </nav>
+        </div>
       )}
     </header>
   );

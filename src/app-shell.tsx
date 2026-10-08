@@ -30,6 +30,8 @@ import Verify from "./pages/auth/Verify";
 import AuthCallback from "./pages/auth/AuthCallback";
 import Login from "./pages/auth/Login";
 import NotFound from "./pages/NotFound";
+import TeacherDashboard from "./pages/TeacherDashboard";
+
 
 export function AppShell() {
   return (
@@ -55,6 +57,10 @@ export function AppShell() {
                   <Route path="/admin/institution" element={<InstitutionAdminDashboard />} />
                   <Route path="/admin/campus" element={<CampusAdminDashboard />} />
                   <Route path="/admin/super" element={<SuperAdminDashboard />} />
+                  <Route path="/admin/campus" element={<CampusAdminDashboard />} />
+                  <Route path="/admin/teacher" element={<TeacherDashboard />} />
+
+
                   <Route path="/admin/institutions/new" element={<InstitutionEditPage />} />
                   <Route path="/admin/institutions/:id/edit" element={<InstitutionEditPage />} />
                   <Route path="/auth/signup" element={<Signup />} />
