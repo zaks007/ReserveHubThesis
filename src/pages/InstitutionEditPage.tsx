@@ -23,6 +23,7 @@ const empty = {
   type: "hotel",
   city: "Debrecen",
   address: "",
+  mapsUrl: "",
   description: "",
   image: "",
   images: [] as string[],
@@ -49,6 +50,7 @@ const InstitutionEditPage = () => {
         type: institution.type,
         city: institution.city,
         address: institution.address || "",
+        mapsUrl: (institution as any).mapsUrl || (institution as any).maps_url || "",
         description: institution.description,
         image: institution.image || imgs[0] || "",
         images: imgs,
@@ -84,12 +86,13 @@ const InstitutionEditPage = () => {
         ...form,
         image: cover,
         images: imagesList,
+        maps_url: form.mapsUrl || null,
         rating: Number(form.rating) || 0,
       };
       const mode = isNew ? await createInstitution(data) : await updateInstitution(id!, data);
       toast({
         title: isNew ? "Institution added" : "Changes saved",
-        description: mode === "local" ? "Saved in browser storage (database was offline or not reachable)." : form.name,
+        description: mode === "local" ? "Saved in browser storage (database was offline or demo row)." : form.name,
       });
       navigate("/admin/super");
     } catch (e: any) {
@@ -116,7 +119,16 @@ const InstitutionEditPage = () => {
             </select>
           </Field>
           <Field label="City *"><Input value={form.city} onChange={(e) => set("city", e.target.value)} /></Field>
-          <Field label="Address"><Input value={form.address} onChange={(e) => set("address", e.target.value)} /></Field>
+          <Field label="Address"><Input placeholder="e.g. Egyetem tér 1, 4032 Debrecen" value={form.address} onChange={(e) => set("address", e.target.value)} /></Field>
+          <div className="md:col-span-2">
+            <Field label="Google Maps Link (optional)">
+              <Input
+                placeholder="https://maps.app.goo.gl/... or https://www.google.com/maps/..."
+                value={form.mapsUrl}
+                onChange={(e) => set("mapsUrl", e.target.value)}
+              />
+            </Field>
+          </div>
           <Field label="Rating (0–5)"><Input type="number" min={0} max={5} step={0.1} value={form.rating} onChange={(e) => set("rating", e.target.value)} /></Field>
           <div className="md:col-span-2">
             <Field label="Description"><Textarea rows={4} value={form.description} onChange={(e) => set("description", e.target.value)} /></Field>

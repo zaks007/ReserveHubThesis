@@ -1,30 +1,38 @@
 import { ExternalLink, MapPin } from "lucide-react";
 
 export interface MapMarker {
-  lat: number;
-  lng: number;
+  lat?: number;
+  lng?: number;
   title: string;
   subtitle?: string;
+  mapsUrl?: string;
 }
 
 interface Props {
   markers: MapMarker[];
 }
 
-const mapsUrl = (m: MapMarker) =>
-  `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
-    m.lat && m.lng ? `${m.lat},${m.lng}` : (m.subtitle ?? m.title),
+const getMapsUrl = (m: MapMarker) => {
+  if (m.mapsUrl && m.mapsUrl.trim().startsWith("http")) {
+    return m.mapsUrl.trim();
+  }
+  if (m.lat && m.lng) {
+    return `https://www.google.com/maps/search/?api=1&query=${m.lat},${m.lng}`;
+  }
+  return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(
+    m.subtitle ? `${m.title}, ${m.subtitle}` : m.title
   )}`;
+};
 
 const InstitutionMap = ({ markers }: Props) => {
   if (!markers.length) return null;
 
   return (
     <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-      {markers.map((m) => (
-        <li key={`${m.title}-${m.lat}-${m.lng}`}>
+      {markers.map((m, idx) => (
+        <li key={`${m.title}-${idx}`}>
           <a
-            href={mapsUrl(m)}
+            href={getMapsUrl(m)}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-start gap-3 rounded-xl border bg-card p-4 card-hover"

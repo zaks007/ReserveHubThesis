@@ -28,7 +28,6 @@ export function ImageGallery({
 
   return (
     <div className="space-y-3">
-      {/* Main Display */}
       <div className={`relative rounded-xl overflow-hidden ${aspectRatio} bg-black/5 border`}>
         <img
           src={validImages[activeIndex]}
@@ -61,16 +60,17 @@ export function ImageGallery({
         )}
       </div>
 
-      {/* Thumbnails Row */}
       {validImages.length > 1 && (
-        <div className="flex gap-2 overflow-x-auto pb-1.5 scrollbar-thin">
+        <div className="flex gap-2 overflow-x-auto pb-1.5">
           {validImages.map((url, i) => (
             <button
               key={i}
               type="button"
               onClick={() => setActiveIndex(i)}
               className={`relative shrink-0 h-16 w-24 rounded-lg overflow-hidden border-2 transition-all ${
-                activeIndex === i ? "border-primary ring-2 ring-primary/20 scale-[1.02]" : "border-border opacity-60 hover:opacity-100"
+                activeIndex === i
+                  ? "border-primary ring-2 ring-primary/20 scale-[1.02]"
+                  : "border-border opacity-60 hover:opacity-100"
               }`}
             >
               <img src={url} alt={`Thumbnail ${i + 1}`} className="w-full h-full object-cover" />

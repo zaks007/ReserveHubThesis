@@ -41,8 +41,8 @@ export default function InstitutionStructureEditor({ institution, tab: fixedTab 
   const isDemo = !UUID_RE.test(institution.id);
 
   const startAdd = () => {
-    if (tab === "campuses") setEditing({ table: "campuses", id: null, form: { name: "", address: "" } });
-    if (tab === "buildings") setEditing({ table: "buildings", id: null, form: { name: "", address: "", campus_id: campuses[0]?.id ?? "" } });
+    if (tab === "campuses") setEditing({ table: "campuses", id: null, form: { name: "", address: "", maps_url: "" } });
+    if (tab === "buildings") setEditing({ table: "buildings", id: null, form: { name: "", address: "", maps_url: "", campus_id: campuses[0]?.id ?? "" } });
     if (tab === "rooms") {
       if (!buildings.length) { toast({ title: "Add a building first", variant: "destructive" }); return; }
       setEditing({
@@ -69,9 +69,9 @@ export default function InstitutionStructureEditor({ institution, tab: fixedTab 
     if (!String(f.name || "").trim()) { toast({ title: "Name is required", variant: "destructive" }); return; }
     let row: Record<string, unknown>;
     if (editing.table === "campuses") {
-      row = { name: f.name, address: f.address || null, institution_id: institution.id };
+      row = { name: f.name, address: f.address || null, maps_url: f.maps_url || null, institution_id: institution.id };
     } else if (editing.table === "buildings") {
-      row = { name: f.name, address: f.address || null, campus_id: f.campus_id || null, institution_id: institution.id };
+      row = { name: f.name, address: f.address || null, maps_url: f.maps_url || null, campus_id: f.campus_id || null, institution_id: institution.id };
     } else {
       const imagesArr: string[] = Array.isArray(f.images) && f.images.length > 0 ? f.images : (f.image_url ? [f.image_url] : []);
       const cover = imagesArr[0] || f.image_url || null;
@@ -121,7 +121,14 @@ export default function InstitutionStructureEditor({ institution, tab: fixedTab 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Field label="Name *"><Input value={f.name} onChange={(e) => set("name", e.target.value)} /></Field>
           {editing.table !== "spaces" && (
-            <Field label="Address"><Input value={f.address || ""} onChange={(e) => set("address", e.target.value)} /></Field>
+            <>
+              <Field label="Address"><Input placeholder="e.g. Kassai út 26" value={f.address || ""} onChange={(e) => set("address", e.target.value)} /></Field>
+              <div className="md:col-span-2">
+                <Field label="Google Maps Link (optional)">
+                  <Input placeholder="https://maps.app.goo.gl/..." value={f.maps_url || ""} onChange={(e) => set("maps_url", e.target.value)} />
+                </Field>
+              </div>
+            </>
           )}
           {editing.table === "buildings" && campuses.length > 0 && (
             <Field label="Campus">
@@ -207,18 +214,24 @@ export default function InstitutionStructureEditor({ institution, tab: fixedTab 
           {tab === "campuses" && campuses.length === 0 && <p className="text-sm text-muted-foreground p-3">No campuses yet.</p>}
           {tab === "campuses" && campuses.filter((c) => match(c.name)).map((c) => (
             <div key={c.id} className="flex items-center justify-between p-3 border rounded-lg">
-              <div><p className="font-medium">{c.name}</p><p className="text-xs text-muted-foreground">{c.buildings.length} buildings{c.address ? ` · ${c.address}` : ""}</p></div>
+              <div>
+                <p className="font-medium">{c.name}</p>
+                <p className="text-xs text-muted-foreground">{c.buildings.length} buildings{c.address ? ` · ${c.address}` : ""}</p>
+              </div>
               <RowActions
-                onEdit={() => setEditing({ table: "campuses", id: c.id, form: { name: c.name, address: c.address || "" } })}
+                onEdit={() => setEditing({ table: "campuses", id: c.id, form: { name: c.name, address: c.address || "", maps_url: (c as any).maps_url || (c as any).mapsUrl || "" } })}
                 onDelete={() => remove("campuses", c.id, c.name)}
               />
             </div>
           ))}
           {tab === "buildings" && buildings.filter((b) => match(b.name)).map((b) => (
             <div key={b.id} className="flex items-center justify-between p-3 border rounded-lg">
-              <div><p className="font-medium">{b.name}</p><p className="text-xs text-muted-foreground">{b.spaces.length} rooms{b.campus ? ` · ${b.campus}` : ""}</p></div>
+              <div>
+                <p className="font-medium">{b.name}</p>
+                <p className="text-xs text-muted-foreground">{b.spaces.length} rooms{b.campus ? ` · ${b.campus}` : ""}</p>
+              </div>
               <RowActions
-                onEdit={() => setEditing({ table: "buildings", id: b.id, form: { name: b.name, address: b.address || "", campus_id: b.campusId || "" } })}
+                onEdit={() => setEditing({ table: "buildings", id: b.id, form: { name: b.name, address: b.address || "", maps_url: (b as any).maps_url || (b as any).mapsUrl || "", campus_id: b.campusId || "" } })}
                 onDelete={() => remove("buildings", b.id, b.name)}
               />
             </div>

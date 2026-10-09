@@ -1,59 +1,75 @@
 import { useParams, Link, useSearchParams } from "react-router-dom";
-import { MapPin, Star, Users, DoorOpen, Building2, ArrowLeft } from "lucide-react";
+import { Star, MapPin, Building2, ArrowLeft } from "lucide-react";
+import { useInstitutions } from "@/contexts/InstitutionsContext";
+import { typeBadgeClass, typeLabelMap, type Space } from "@/data/mockData";
 import { Button } from "@/components/ui/button";
 import Breadcrumbs from "@/components/Breadcrumbs";
-import InstitutionMap, { MapMarker } from "@/components/InstitutionMap";
+import InstitutionMap, { type MapMarker } from "@/components/InstitutionMap";
 import ImageGallery from "@/components/ImageGallery";
-import { typeLabelMap, typeBadgeClass } from "@/data/mockData";
-import type { Space } from "@/data/mockData";
-import { useInstitutions } from "@/contexts/InstitutionsContext";
 
 const InstitutionDetail = () => {
   const { id } = useParams<{ id: string }>();
   const [searchParams] = useSearchParams();
+  const selectedCampusId = searchParams.get("campus");
   const { getById } = useInstitutions();
-  const institution = getById(id || "");
+  const institution = id ? getById(id) : undefined;
 
   if (!institution) {
     return (
-      <div className="container py-20 text-center">
-        <p className="text-lg text-muted-foreground">Institution not found.</p>
+      <div className="container py-16 text-center">
+        <h1 className="text-2xl font-bold mb-4">Institution Not Found</h1>
+        <p className="text-muted-foreground mb-6">The institution you are looking for does not exist.</p>
+        <Button asChild>
+          <Link to="/institutions">Back to Explore</Link>
+        </Button>
       </div>
     );
   }
 
-  const hasCampuses = institution.campuses && institution.campuses.length > 0;
-  const selectedCampusId = searchParams.get("campus");
-  const selectedCampus = hasCampuses
+  const hasCampuses = (institution.campuses?.length ?? 0) > 0;
+  const selectedCampus = hasCampuses && selectedCampusId
     ? institution.campuses!.find((c) => c.id === selectedCampusId)
     : undefined;
+
+  const galleryImages = (institution.images && institution.images.length > 0)
+    ? institution.images
+    : (institution.image ? [institution.image] : []);
 
   let mapMarkers: MapMarker[] = [];
   let mapTitle = "Location";
 
   if (hasCampuses && !selectedCampus) {
     mapMarkers = institution.campuses!
-      .filter((c) => c.coords)
-      .map((c) => ({ lat: c.coords!.lat, lng: c.coords!.lng, title: c.name, subtitle: c.address }));
+      .filter((c) => c.coords || c.address || (c as any).maps_url || (c as any).mapsUrl)
+      .map((c) => ({
+        lat: c.coords?.lat,
+        lng: c.coords?.lng,
+        title: c.name,
+        subtitle: c.address,
+        mapsUrl: (c as any).maps_url || (c as any).mapsUrl,
+      }));
     mapTitle = "Campuses on the map";
   } else if (selectedCampus) {
     mapMarkers = selectedCampus.buildings
-      .filter((b) => b.coords)
-      .map((b) => ({ lat: b.coords!.lat, lng: b.coords!.lng, title: b.name, subtitle: b.address }));
+      .filter((b) => b.coords || b.address || (b as any).maps_url || (b as any).mapsUrl)
+      .map((b) => ({
+        lat: b.coords?.lat,
+        lng: b.coords?.lng,
+        title: b.name,
+        subtitle: b.address,
+        mapsUrl: (b as any).maps_url || (b as any).mapsUrl,
+      }));
     mapTitle = "Faculty buildings";
-  } else if (institution.coords) {
+  } else if (institution.coords || institution.address || (institution as any).maps_url || (institution as any).mapsUrl) {
     mapMarkers = [{
-      lat: institution.coords.lat,
-      lng: institution.coords.lng,
+      lat: institution.coords?.lat,
+      lng: institution.coords?.lng,
       title: institution.name,
       subtitle: institution.address,
+      mapsUrl: (institution as any).maps_url || (institution as any).mapsUrl,
     }];
     mapTitle = "Location";
   }
-
-  const galleryImages = institution.images && institution.images.length > 0
-    ? institution.images
-    : [institution.image].filter(Boolean);
 
   return (
     <div className="container py-4">
@@ -63,12 +79,9 @@ const InstitutionDetail = () => {
         ...(selectedCampus ? [{ label: selectedCampus.name }] : []),
       ]} />
 
-      {/* Header */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-10">
         <div className="lg:col-span-2">
-          <div className="rounded-xl overflow-hidden aspect-[16/9]">
-            <ImageGallery images={galleryImages} alt={institution.name} />
-          </div>
+          <ImageGallery images={galleryImages} alt={institution.name} aspectRatio="aspect-[16/9]" />
         </div>
         <div className="flex flex-col justify-center">
           <span className={`self-start text-xs font-semibold px-3 py-1 rounded-full mb-3 ${typeBadgeClass[institution.type]}`}>
@@ -85,7 +98,6 @@ const InstitutionDetail = () => {
         </div>
       </div>
 
-      {/* Map */}
       {mapMarkers.length > 0 && (
         <div className="mb-10">
           <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
@@ -95,124 +107,153 @@ const InstitutionDetail = () => {
         </div>
       )}
 
-      {/* University: campus list first */}
       {hasCampuses && !selectedCampus && (
-        <div>
-          <h2 className="text-2xl font-bold mb-6">Campuses</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="mb-10">
+          <h2 className="text-2xl font-bold mb-2">Choose a campus</h2>
+          <p className="text-muted-foreground mb-6">
+            Pick a campus to view its available seminar rooms and lecture halls.
+          </p>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {institution.campuses!.map((campus) => {
-              const totalRooms = campus.buildings.reduce((sum, b) => sum + b.spaces.length, 0);
+              const spaceCount = campus.buildings.reduce((sum, b) => sum + b.spaces.length, 0);
               return (
-                <div key={campus.id} className="bg-card border rounded-xl p-6 flex flex-col justify-between">
-                  <div>
-                    <h3 className="text-xl font-bold mb-1">{campus.name}</h3>
-                    {campus.address && (
-                      <p className="flex items-center gap-1 text-sm text-muted-foreground mb-4">
-                        <MapPin className="h-3.5 w-3.5" /> {campus.address}
-                      </p>
-                    )}
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground mb-6">
-                      <span className="flex items-center gap-1">
-                        <Building2 className="h-4 w-4" /> {campus.buildings.length} Buildings
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <DoorOpen className="h-4 w-4" /> {totalRooms} Spaces
-                      </span>
-                    </div>
+                <Link
+                  key={campus.id}
+                  to={`/institutions/${institution.id}?campus=${campus.id}`}
+                  className="bg-card border rounded-xl p-6 card-hover flex items-start gap-4"
+                >
+                  <div className="h-12 w-12 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                    <Building2 className="h-6 w-6" />
                   </div>
-                  <Button asChild className="w-full">
-                    <Link to={`/institutions/${institution.id}?campus=${campus.id}`}>
-                      View Faculty Buildings
-                    </Link>
-                  </Button>
-                </div>
+                  <div>
+                    <h3 className="font-semibold text-lg mb-1">{campus.name}</h3>
+                    <p className="text-sm text-muted-foreground">
+                      {campus.buildings.length} {campus.buildings.length === 1 ? "faculty" : "faculties"} · {spaceCount} rooms
+                    </p>
+                  </div>
+                </Link>
               );
             })}
           </div>
         </div>
       )}
 
-      {/* Campus detail view */}
       {selectedCampus && (
-        <div>
-          <div className="flex items-center gap-4 mb-6">
-            <Button asChild variant="outline" size="sm">
-              <Link to={`/institutions/${institution.id}`}>
-                <ArrowLeft className="h-4 w-4 mr-1" /> All Campuses
-              </Link>
-            </Button>
-            <div>
-              <h2 className="text-2xl font-bold">{selectedCampus.name}</h2>
-              {selectedCampus.address && (
-                <p className="text-sm text-muted-foreground flex items-center gap-1">
-                  <MapPin className="h-3.5 w-3.5" /> {selectedCampus.address}
-                </p>
-              )}
-            </div>
+        <div className="mb-6 flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold">{selectedCampus.name}</h2>
+            {selectedCampus.address && (
+              <p className="text-sm text-muted-foreground">{selectedCampus.address}</p>
+            )}
           </div>
-          <BuildingList buildings={selectedCampus.buildings} institutionId={institution.id} />
+          <Button asChild variant="outline" size="sm">
+            <Link to={`/institutions/${institution.id}`}>
+              <ArrowLeft className="h-4 w-4 mr-1.5" /> All Campuses
+            </Link>
+          </Button>
         </div>
       )}
 
-      {/* Non-university institutions: buildings and rooms */}
-      {!hasCampuses && institution.buildings.length > 0 && (
-        <BuildingList buildings={institution.buildings} institutionId={institution.id} />
-      )}
+      {(() => {
+        const buildingsToRender = selectedCampus
+          ? selectedCampus.buildings
+          : hasCampuses
+          ? []
+          : institution.buildings;
+
+        if (buildingsToRender.length === 0 && !hasCampuses) {
+          return <p className="text-muted-foreground">No spaces available at this institution.</p>;
+        }
+
+        return (
+          <div className="space-y-8">
+            {buildingsToRender.map((building) => (
+              <div key={building.id} className="bg-card border rounded-xl p-6">
+                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                  <Building2 className="h-5 w-5 text-primary" /> {building.name}
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {building.spaces.map((space) => (
+                    <SpaceCard
+                      key={space.id}
+                      space={space}
+                      institutionId={institution.id}
+                      institutionType={institution.type}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        );
+      })()}
     </div>
   );
 };
 
-const BuildingList = ({ buildings, institutionId }: { buildings: { id: string; name: string; address?: string; spaces: Space[] }[]; institutionId: string }) => (
-  <div className="space-y-8">
-    {buildings.map((building) => (
-      <div key={building.id}>
-        <div className="flex items-center gap-2 mb-4">
-          <Building2 className="h-5 w-5 text-primary" />
-          <h3 className="text-xl font-bold">{building.name}</h3>
-          {building.address && (
-            <span className="text-sm text-muted-foreground flex items-center gap-1 ml-2">
-              <MapPin className="h-3.5 w-3.5" /> {building.address}
+function SpaceCard({
+  space,
+  institutionId,
+  institutionType,
+}: {
+  space: Space;
+  institutionId: string;
+  institutionType: string;
+}) {
+  const isNight = institutionType === "hotel" || institutionType === "airbnb";
+  const isMonth = institutionType === "garden";
+  const unitLabel = space.priceUnit
+    ? `/${space.priceUnit}`
+    : isNight
+    ? "/night"
+    : isMonth
+    ? "/month"
+    : "/hour";
+
+  return (
+    <Link
+      to={`/institutions/${institutionId}/spaces/${space.id}`}
+      className="border rounded-lg overflow-hidden card-hover bg-background flex flex-col"
+    >
+      <div className="aspect-video w-full overflow-hidden bg-muted">
+        {space.image ? (
+          <img src={space.image} alt={space.name} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-muted-foreground text-sm">
+            No image
+          </div>
+        )}
+      </div>
+      <div className="p-4 flex-1 flex flex-col justify-between">
+        <div>
+          <div className="flex items-start justify-between gap-2 mb-1">
+            <h4 className="font-semibold text-base">{space.name}</h4>
+            <span
+              className={`text-xs px-2 py-0.5 rounded-full shrink-0 ${
+                space.available ? "status-confirmed" : "status-cancelled"
+              }`}
+            >
+              {space.available ? "Available" : "Unavailable"}
             </span>
-          )}
+          </div>
+          <p className="text-xs text-muted-foreground mb-3">Capacity: {space.capacity} people</p>
+          <div className="flex flex-wrap gap-1 mb-3">
+            {space.features.slice(0, 3).map((f) => (
+              <span key={f} className="text-[11px] bg-muted px-2 py-0.5 rounded text-muted-foreground">
+                {f}
+              </span>
+            ))}
+          </div>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {building.spaces.map((space) => (
-            <div key={space.id} className="bg-card border rounded-lg overflow-hidden card-hover flex flex-col">
-              <div className="aspect-[16/10] overflow-hidden">
-                <img src={space.image} alt={space.name} className="w-full h-full object-cover transition-transform duration-300 hover:scale-105" />
-              </div>
-              <div className="p-4 flex flex-col flex-1">
-                <h4 className="font-bold text-base mb-1">{space.name}</h4>
-                <div className="flex items-center gap-3 text-xs text-muted-foreground mb-3">
-                  <span className="flex items-center gap-1"><Users className="h-3.5 w-3.5" /> {space.capacity}</span>
-                  <span className="font-semibold text-foreground">
-                    {space.pricePerHour === 0 ? "Free" : `${space.pricePerHour.toLocaleString()} HUF / ${space.priceUnit || "hour"}`}
-                  </span>
-                </div>
-                <div className="flex flex-wrap gap-1 mb-4">
-                  {space.features.slice(0, 3).map((f) => (
-                    <span key={f} className="text-[10px] bg-secondary px-2 py-0.5 rounded-full text-muted-foreground">{f}</span>
-                  ))}
-                  {space.features.length > 3 && (
-                    <span className="text-[10px] text-muted-foreground">+{space.features.length - 3}</span>
-                  )}
-                </div>
-                <div className="mt-auto">
-                  {space.available ? (
-                    <Button asChild className="w-full" size="sm">
-                      <Link to={`/spaces/${space.id}`}>Book Now</Link>
-                    </Button>
-                  ) : (
-                    <Button className="w-full" size="sm" disabled variant="secondary">Unavailable</Button>
-                  )}
-                </div>
-              </div>
-            </div>
-          ))}
+        <div className="flex items-center justify-between pt-2 border-t mt-auto">
+          <span className="text-sm font-semibold">
+            {space.pricePerHour === 0 ? "Free" : `${space.pricePerHour.toLocaleString()} HUF ${unitLabel}`}
+          </span>
+          <span className="text-xs text-primary font-medium">View details →</span>
         </div>
       </div>
-    ))}
-  </div>
-);
+    </Link>
+  );
+}
 
 export default InstitutionDetail;

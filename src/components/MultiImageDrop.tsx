@@ -60,8 +60,9 @@ export function MultiImageDrop({ values = [], onChange, maxImages = 10 }: MultiI
 
   return (
     <div className="space-y-3">
-      {/* Upload Drop Zone */}
       <div
+        role="button"
+        tabIndex={0}
         onClick={() => inputRef.current?.click()}
         onDragOver={(e) => {
           e.preventDefault();
@@ -94,7 +95,6 @@ export function MultiImageDrop({ values = [], onChange, maxImages = 10 }: MultiI
         />
       </div>
 
-      {/* Previews Grid */}
       {values.length > 0 && (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
           {values.map((url, idx) => (
@@ -113,7 +113,7 @@ export function MultiImageDrop({ values = [], onChange, maxImages = 10 }: MultiI
                       e.stopPropagation();
                       setAsCover(idx);
                     }}
-                    className="p-1.5 rounded-full bg-background/90 text-foreground hover:bg-background text-xs"
+                    className="p-1.5 rounded-full bg-background/90 text-foreground hover:bg-background text-xs font-medium"
                     title="Set as main cover photo"
                   >
                     Set cover
