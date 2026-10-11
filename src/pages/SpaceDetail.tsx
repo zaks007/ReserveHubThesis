@@ -1,32 +1,44 @@
-import { useParams, useNavigate, Link } from "react-router-dom";
-import { Users, Check, Clock, DollarSign, Wallet } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { Users, Check, Clock, DollarSign, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Breadcrumbs from "@/components/Breadcrumbs";
-import ImageGallery from "@/components/ImageGallery";
-import RoomAvailabilityCalendar from "@/components/RoomAvailabilityCalendar";
 import { getSpaceById, defaultPriceUnit, priceUnitLabel, PriceUnit } from "@/data/mockData";
 import { toast } from "@/hooks/use-toast";
 import { useAuth, isUniversityUserRole } from "@/contexts/AuthContext";
 import { useBookings } from "@/contexts/BookingsContext";
 import { useInstitutions } from "@/contexts/InstitutionsContext";
-import { supabase } from "@/integrations/supabase/client";
+
+// Helper to add days to an ISO YYYY-MM-DD string without timezone skew
+function addDays(isoDate: string, days: number): string {
+  const parts = isoDate.split("-").map(Number);
+  if (parts.length !== 3) return isoDate;
+  const [y, m, d] = parts;
+  const dt = new Date(y, m - 1, d);
+  dt.setDate(dt.getDate() + days);
+  const nextY = dt.getFullYear();
+  const nextM = String(dt.getMonth() + 1).padStart(2, "0");
+  const nextD = String(dt.getDate()).padStart(2, "0");
+  return `${nextY}-${nextM}-${nextD}`;
+}
 
 const SpaceDetail = () => {
   const { spaceId } = useParams<{ spaceId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { createBooking } = useBookings();
+  const { createBooking, getBookingsForSpace } = useBookings();
   const { institutions } = useInstitutions();
 
   const result = useMemo(() => {
     const id = spaceId || "";
     for (const institution of institutions) {
-      for (const campus of institution.campuses || []) for (const building of campus.buildings) {
-        const space = building.spaces.find((s) => s.id === id);
-        if (space) return { space, building, institution, campus };
+      for (const campus of institution.campuses || []) {
+        for (const building of campus.buildings) {
+          const space = building.spaces.find((s) => s.id === id);
+          if (space) return { space, building, institution, campus };
+        }
       }
       for (const building of institution.buildings || []) {
         const space = building.spaces.find((s) => s.id === id);
@@ -39,23 +51,8 @@ const SpaceDetail = () => {
   const [date, setDate] = useState("");
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
-  const [units, setUnits] = useState<number>(1);
-  const [walletBalance, setWalletBalance] = useState<number | null>(null);
-
-  // Fetch real user's wallet balance
-  useEffect(() => {
-    if (!user || user.isDemo) return;
-    const fetchBalance = async () => {
-      const { data } = await (supabase as any)
-        .from("wallets")
-        .select("balance")
-        .eq("owner_type", "user")
-        .eq("owner_id", user.id)
-        .maybeSingle();
-      if (data) setWalletBalance(Number(data.balance ?? 0));
-    };
-    void fetchBalance();
-  }, [user]);
+  const [units, setUnits] = useState<number>(1); // # of nights or months
+  const [currentImageIndex, setCurrentImageIndex] = useState(0);
 
   if (!result) {
     return (
@@ -66,6 +63,20 @@ const SpaceDetail = () => {
   }
 
   const { space, building, institution, campus } = result;
+
+  // Multi-image collection for space
+  const images: string[] = useMemo(() => {
+    const list: string[] = [];
+    if (space.images && Array.isArray(space.images) && space.images.length > 0) {
+      list.push(...space.images.filter(Boolean));
+    }
+    if (space.image && !list.includes(space.image)) {
+      list.unshift(space.image);
+    }
+    return list.length > 0 ? list : [space.image || "/placeholder.svg"];
+  }, [space]);
+
+  const activeImage = images[currentImageIndex] || images[0];
 
   const isUniSpace = institution.type === "university";
   const isInternalUni = !!user && isUniversityUserRole(user.role);
@@ -79,7 +90,7 @@ const SpaceDetail = () => {
       if (!startTime || !endTime || startTime >= endTime) return 0;
       const [sh, sm] = startTime.split(":").map(Number);
       const [eh, em] = endTime.split(":").map(Number);
-      const hours = (eh + em / 60) - (sh + sm / 60);
+      const hours = eh + em / 60 - (sh + sm / 60);
       return Math.max(0, Math.round(hours * effectivePrice));
     }
     return effectivePrice * Math.max(1, units);
@@ -93,6 +104,58 @@ const SpaceDetail = () => {
     { label: space.name },
   ];
 
+  // Active bookings for this specific space
+  const activeBookings = useMemo(() => {
+    return getBookingsForSpace(space.id).filter(
+      (b) => b.status === "approved" || b.status === "pending"
+    );
+  }, [getBookingsForSpace, space.id]);
+
+  // Taken time slots for the chosen date (per-hour spaces)
+  const bookedSlotsOnDate = useMemo(() => {
+    if (!date || unit !== "hour") return [];
+    return activeBookings
+      .filter((b) => b.date === date)
+      .map((b) => `${b.startTime}–${b.endTime}`);
+  }, [activeBookings, date, unit]);
+
+  // Conflict detection based on booking type
+  const conflictMessage = useMemo(() => {
+    if (!date) return null;
+
+    if (unit === "hour") {
+      if (!startTime || !endTime || startTime >= endTime) return null;
+      const overlap = activeBookings.find(
+        (b) => b.date === date && startTime < b.endTime && b.startTime < endTime
+      );
+      if (overlap) {
+        return `Someone has already booked this space on this day from ${overlap.startTime} to ${overlap.endTime}. Please choose another time window or date.`;
+      }
+      return null;
+    }
+
+    if (unit === "night") {
+      const nightCount = Math.max(1, units || 1);
+      const requestedNights: string[] = [];
+      for (let i = 0; i < nightCount; i++) {
+        requestedNights.push(addDays(date, i));
+      }
+
+      const bookedNight = activeBookings.find((b) => requestedNights.includes(b.date));
+      if (bookedNight) {
+        return `Someone has already booked this space for the night of ${bookedNight.date}. Please select different dates.`;
+      }
+      return null;
+    }
+
+    // Default / per-month: match starting date or overlapping day
+    const matched = activeBookings.find((b) => b.date === date);
+    if (matched) {
+      return `Someone has already booked this space on ${date}. Please select another date.`;
+    }
+    return null;
+  }, [activeBookings, date, startTime, endTime, unit, units]);
+
   const handleReserve = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || user.role === "guest") {
@@ -104,6 +167,7 @@ const SpaceDetail = () => {
       toast({ title: "Please choose a date", variant: "destructive" });
       return;
     }
+
     let bookStart = "00:00";
     let bookEnd = "23:59";
     if (unit === "hour") {
@@ -124,16 +188,14 @@ const SpaceDetail = () => {
       }
     }
 
-    // Check wallet balance for paid bookings
-    if (!isFreeAndInstant && totalPrice > 0 && walletBalance !== null) {
-      if (walletBalance < totalPrice) {
-        toast({
-          title: "Insufficient wallet balance",
-          description: `This booking requires ${totalPrice.toLocaleString()} HUF, but your wallet only has ${walletBalance.toLocaleString()} HUF. Please top up your wallet.`,
-          variant: "destructive",
-        });
-        return;
-      }
+    // Block submission if conflict detected
+    if (conflictMessage) {
+      toast({
+        title: "Already Booked",
+        description: conflictMessage,
+        variant: "destructive",
+      });
+      return;
     }
 
     const durationLabel =
@@ -161,7 +223,11 @@ const SpaceDetail = () => {
     );
 
     if (!res.ok) {
-      toast({ title: "Booking conflict", description: res.error, variant: "destructive" });
+      toast({
+        title: "Booking conflict",
+        description: res.error || "Someone has already booked that day or time.",
+        variant: "destructive",
+      });
       return;
     }
 
@@ -179,26 +245,66 @@ const SpaceDetail = () => {
       ? "Free"
       : `${effectivePrice.toLocaleString()} HUF / ${priceUnitLabel[unit]}`;
 
-  const spaceGalleryImages =
-    space.images && space.images.length > 0
-      ? space.images
-      : [space.image].filter(Boolean);
-
-  const isInsufficient =
-    !isFreeAndInstant &&
-    totalPrice > 0 &&
-    walletBalance !== null &&
-    walletBalance < totalPrice;
-
   return (
     <div className="container py-4">
       <Breadcrumbs items={breadcrumbs} />
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
-          <div className="mb-6">
-            <ImageGallery images={spaceGalleryImages} alt={space.name} />
+          {/* Main Space Photo & Carousel */}
+          <div className="relative rounded-xl overflow-hidden aspect-[16/9] mb-4 bg-muted group">
+            <img
+              src={activeImage}
+              alt={space.name}
+              className="w-full h-full object-cover transition-opacity duration-200"
+            />
+            {images.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={() =>
+                    setCurrentImageIndex((prev) => (prev - 1 + images.length) % images.length)
+                  }
+                  aria-label="Previous photo"
+                  className="absolute left-3 top-1/2 -translate-y-1/2 h-9 w-9 rounded-full bg-black/60 text-white flex items-center justify-center opacity-80 hover:opacity-100 transition shadow"
+                >
+                  <ChevronLeft className="h-5 w-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCurrentImageIndex((prev) => (prev + 1) % images.length)}
+                  aria-label="Next photo"
+                  className="absolute right-3 top-1/2 -translate-y-1/2 h-9 w-9 rounded-full bg-black/60 text-white flex items-center justify-center opacity-80 hover:opacity-100 transition shadow"
+                >
+                  <ChevronRight className="h-5 w-5" />
+                </button>
+                <span className="absolute bottom-3 right-3 text-xs bg-black/70 text-white px-2 py-1 rounded">
+                  {currentImageIndex + 1} / {images.length}
+                </span>
+              </>
+            )}
           </div>
+
+          {/* Thumbnails if multiple images exist */}
+          {images.length > 1 && (
+            <div className="flex gap-2 overflow-x-auto pb-2 mb-6">
+              {images.map((img, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setCurrentImageIndex(idx)}
+                  className={`relative shrink-0 w-20 h-14 rounded-lg overflow-hidden border-2 transition ${
+                    idx === currentImageIndex
+                      ? "border-primary ring-2 ring-primary/40"
+                      : "border-transparent opacity-70 hover:opacity-100"
+                  }`}
+                >
+                  <img src={img} alt="" className="w-full h-full object-cover" />
+                </button>
+              ))}
+            </div>
+          )}
+
           <h1 className="text-3xl font-bold mb-4">{space.name}</h1>
 
           <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
@@ -217,7 +323,11 @@ const SpaceDetail = () => {
             <div className="bg-card border rounded-lg p-4 text-center">
               <Clock className="h-5 w-5 mx-auto mb-2 text-primary" />
               <p className="text-sm text-muted-foreground">Status</p>
-              <p className={`font-bold text-lg ${space.available ? "text-success" : "text-destructive"}`}>
+              <p
+                className={`font-bold text-lg ${
+                  space.available ? "text-success" : "text-destructive"
+                }`}
+              >
                 {space.available ? "Available" : "Occupied"}
               </p>
             </div>
@@ -232,42 +342,82 @@ const SpaceDetail = () => {
               </div>
             ))}
           </div>
-
-          <h2 className="text-xl font-bold mb-3">Availability Calendar</h2>
-          <RoomAvailabilityCalendar spaceId={space.id} />
         </div>
 
+        {/* Booking Card */}
         <div className="lg:col-span-1">
           <div className="bg-card border rounded-xl p-6 sticky top-24">
             <h3 className="text-xl font-bold mb-1">Reserve This Space</h3>
             <p className="text-sm text-muted-foreground mb-3">
               {priceLabel} · {institution.name}
             </p>
+
             {isFreeAndInstant && (
-              <div className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700">
+              <div className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-700 dark:text-emerald-400">
                 ✓ University access: free booking with instant confirmation.
               </div>
             )}
             {isUniSpace && !isInternalUni && (
-              <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700">
+              <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400">
                 External users: bookings require approval from the campus admin.
               </div>
             )}
+
             <form onSubmit={handleReserve} className="space-y-4">
               <div>
-                <Label>{unit === "hour" ? "Date" : unit === "night" ? "Check-in date" : "Start date"}</Label>
-                <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} className="mt-1" />
+                <Label>
+                  {unit === "hour"
+                    ? "Date"
+                    : unit === "night"
+                    ? "Check-in date"
+                    : "Start date"}
+                </Label>
+                <Input
+                  type="date"
+                  value={date}
+                  onChange={(e) => setDate(e.target.value)}
+                  className="mt-1"
+                />
               </div>
+
+              {/* For hourly spaces: show slots already taken today */}
+              {unit === "hour" && date && bookedSlotsOnDate.length > 0 && (
+                <div className="rounded-lg bg-secondary/50 p-2.5 text-xs">
+                  <p className="text-muted-foreground font-medium mb-1">
+                    Booked slots on this day:
+                  </p>
+                  <div className="flex flex-wrap gap-1">
+                    {bookedSlotsOnDate.map((slot, i) => (
+                      <span
+                        key={i}
+                        className="rounded bg-destructive/15 text-destructive px-2 py-0.5 font-medium"
+                      >
+                        {slot}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {unit === "hour" && (
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <Label>Start</Label>
-                    <Input type="time" value={startTime} onChange={(e) => setStartTime(e.target.value)} className="mt-1" />
+                    <Input
+                      type="time"
+                      value={startTime}
+                      onChange={(e) => setStartTime(e.target.value)}
+                      className="mt-1"
+                    />
                   </div>
                   <div>
                     <Label>End</Label>
-                    <Input type="time" value={endTime} onChange={(e) => setEndTime(e.target.value)} className="mt-1" />
+                    <Input
+                      type="time"
+                      value={endTime}
+                      onChange={(e) => setEndTime(e.target.value)}
+                      className="mt-1"
+                    />
                   </div>
                 </div>
               )}
@@ -286,24 +436,21 @@ const SpaceDetail = () => {
                 </div>
               )}
 
-              {effectivePrice > 0 && totalPrice > 0 && (
-                <div className="space-y-1.5">
-                  <div className="rounded-lg bg-secondary/60 px-3 py-2 text-sm flex items-center justify-between">
-                    <span className="text-muted-foreground">Estimated total</span>
-                    <span className="font-bold">{totalPrice.toLocaleString()} HUF</span>
+              {/* Real-time Conflict Alert Message */}
+              {conflictMessage && (
+                <div className="rounded-lg border border-destructive/40 bg-destructive/10 p-3 text-xs text-destructive flex items-start gap-2">
+                  <AlertCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold">Already Booked</p>
+                    <p className="mt-0.5 leading-relaxed">{conflictMessage}</p>
                   </div>
-                  {walletBalance !== null && (
-                    <div className="flex items-center justify-between text-xs px-1 text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <Wallet className="h-3.5 w-3.5" /> Balance: {walletBalance.toLocaleString()} HUF
-                      </span>
-                      {isInsufficient && (
-                        <Link to="/wallet" className="text-destructive font-medium hover:underline">
-                          Top up required →
-                        </Link>
-                      )}
-                    </div>
-                  )}
+                </div>
+              )}
+
+              {effectivePrice > 0 && totalPrice > 0 && !conflictMessage && (
+                <div className="rounded-lg bg-secondary/60 px-3 py-2 text-sm flex items-center justify-between">
+                  <span className="text-muted-foreground">Estimated total</span>
+                  <span className="font-bold">{totalPrice.toLocaleString()} HUF</span>
                 </div>
               )}
 
@@ -311,16 +458,17 @@ const SpaceDetail = () => {
                 type="submit"
                 className="w-full"
                 size="lg"
-                disabled={!space.available || isInsufficient}
+                disabled={!space.available || !!conflictMessage}
               >
                 {!space.available
                   ? "Currently Unavailable"
-                  : isInsufficient
-                  ? "Insufficient Balance"
+                  : conflictMessage
+                  ? "Already Booked for this Time / Date"
                   : isFreeAndInstant
                   ? "Book Instantly (Free)"
                   : "Submit Booking Request"}
               </Button>
+
               <p className="text-xs text-muted-foreground text-center">
                 {isFreeAndInstant
                   ? "Confirmed immediately for university members."

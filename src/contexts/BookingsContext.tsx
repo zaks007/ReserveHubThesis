@@ -15,6 +15,8 @@ export interface SimBooking extends Omit<Booking, "status"> {
   userEmail: string;
   userId?: string;
   rejectionReason?: string;
+  endDate?: string;
+  nights?: number;
 }
 
 interface BookingsContextValue {
@@ -27,6 +29,7 @@ interface BookingsContextValue {
   cancelBooking: (id: string) => Promise<void>;
   hasConflict: (spaceId: string, date: string, start: string, end: string, ignoreId?: string) => boolean;
   getBookingsForSpace: (spaceId: string) => SimBooking[];
+  refresh: () => Promise<void>;
 }
 
 const Ctx = createContext<BookingsContextValue | null>(null);
@@ -41,35 +44,61 @@ const seed: SimBooking[] = seedBookings.map((b, i) => ({
 }));
 
 const DEMO_KEY = "reservehub_demo_bookings";
+
 const loadDemo = (): SimBooking[] => {
   if (typeof window === "undefined") return seed;
   try {
-    const v = JSON.parse(localStorage.getItem(DEMO_KEY) || "null");
+    const raw = localStorage.getItem(DEMO_KEY);
+    if (!raw) return seed;
+    const v = JSON.parse(raw);
     return Array.isArray(v) ? v : seed;
   } catch {
     return seed;
   }
 };
+
 const saveDemo = (list: SimBooking[]) => {
   try {
     localStorage.setItem(DEMO_KEY, JSON.stringify(list));
   } catch {
-    /* ignore */
+    /* ignore storage errors */
   }
+};
+
+// Helper: check if a target date is covered by a booking (single day or multi-night range)
+const isDateCovered = (b: SimBooking, targetDate: string): boolean => {
+  if (b.date === targetDate) return true;
+  if (b.endDate && b.date <= targetDate && targetDate <= b.endDate) return true;
+  if (b.nights && b.nights > 1) {
+    const parts = b.date.split("-").map(Number);
+    if (parts.length === 3) {
+      const [y, m, d] = parts;
+      for (let i = 0; i < b.nights; i++) {
+        const dt = new Date(y, m - 1, d + i);
+        const ds = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+        if (ds === targetDate) return true;
+      }
+    }
+  }
+  return false;
+};
+
+const timeOverlap = (aStart: string, aEnd: string, bStart: string, bEnd: string) => {
+  return aStart < bEnd && bStart < aEnd;
 };
 
 export const BookingsProvider = ({ children }: { children: ReactNode }) => {
   const { user } = useAuth();
   const { institutions } = useInstitutions();
-  const [bookings, setBookings] = useState<SimBooking[]>(seed);
+  const [bookings, setBookings] = useState<SimBooking[]>(loadDemo);
 
-  // Resolve names/ids from the loaded institutions tree
+  // Resolve metadata (names/capacities) from loaded institutions tree
   const enrich = useCallback(
     (spaceId: string) => {
       for (const inst of institutions) {
         for (const c of inst.campuses ?? []) {
           for (const b of c.buildings ?? []) {
-            const s = b.spaces.find((space) => space.id === spaceId);
+            const s = b.spaces.find((s) => s.id === spaceId);
             if (s) {
               return {
                 spaceName: s.name,
@@ -83,7 +112,7 @@ export const BookingsProvider = ({ children }: { children: ReactNode }) => {
           }
         }
         for (const b of inst.buildings ?? []) {
-          const s = b.spaces.find((space) => space.id === spaceId);
+          const s = b.spaces.find((s) => s.id === spaceId);
           if (s) {
             return {
               spaceName: s.name,
@@ -97,7 +126,7 @@ export const BookingsProvider = ({ children }: { children: ReactNode }) => {
         }
       }
       return {
-        spaceName: "Unknown space",
+        spaceName: "Space",
         institutionName: "",
         buildingName: "",
         institutionId: "",
@@ -109,52 +138,67 @@ export const BookingsProvider = ({ children }: { children: ReactNode }) => {
   );
 
   const refresh = useCallback(async () => {
-    if (!user || user.isDemo) {
-      setBookings(loadDemo());
-      return;
+    // 1. Always load local demo bookings so demo roles retain state
+    const demoList = loadDemo();
+
+    // 2. Try fetching real bookings from Supabase
+    let dbRows: SimBooking[] = [];
+    try {
+      const { data, error } = await supabase
+        .from("bookings")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+      if (!error && Array.isArray(data) && data.length > 0) {
+        const ids = [...new Set(data.map((r: any) => r.user_id).filter(Boolean))];
+        const emails: Record<string, string> = {};
+        if (ids.length) {
+          try {
+            const { data: profs } = await supabase.from("profiles").select("id,email").in("id", ids);
+            for (const p of profs ?? []) emails[(p as any).id] = (p as any).email;
+          } catch {
+            /* ignore profile fetch errors */
+          }
+        }
+
+        dbRows = data.map((r: any) => {
+          const meta = enrich(r.space_id);
+          return {
+            id: r.id,
+            spaceId: r.space_id,
+            spaceName: meta.spaceName,
+            institutionId: meta.institutionId,
+            campusId: meta.campusId,
+            institutionName: meta.institutionName,
+            buildingName: meta.buildingName,
+            capacity: meta.capacity,
+            date: r.date,
+            startTime: String(r.start_time || "00:00").slice(0, 5),
+            endTime: String(r.end_time || "23:59").slice(0, 5),
+            status: (r.status || "pending") as BookingStatus,
+            userEmail: emails[r.user_id] ?? "",
+            userId: r.user_id,
+            rejectionReason: r.rejection_reason ?? undefined,
+          };
+        });
+      }
+    } catch {
+      /* ignore Supabase connectivity or RLS errors */
     }
-    const { data, error } = await supabase
-      .from("bookings")
-      .select("*")
-      .order("created_at", { ascending: false });
-    if (error) {
-      console.error("bookings load", error);
-      return;
-    }
-    const ids = [...new Set((data ?? []).map((r: any) => r.user_id))];
-    const emails: Record<string, string> = {};
-    if (ids.length) {
-      const { data: profs } = await supabase.from("profiles").select("id,email").in("id", ids);
-      for (const p of profs ?? []) emails[(p as any).id] = (p as any).email;
-    }
-    const rows: SimBooking[] = (data ?? []).map((r: any) => {
-      const meta = enrich(r.space_id);
-      return {
-        id: r.id,
-        spaceId: r.space_id,
-        spaceName: meta.spaceName,
-        institutionId: meta.institutionId,
-        campusId: meta.campusId,
-        institutionName: meta.institutionName,
-        buildingName: meta.buildingName,
-        capacity: meta.capacity,
-        date: r.date,
-        startTime: String(r.start_time).slice(0, 5),
-        endTime: String(r.end_time).slice(0, 5),
-        status: r.status as BookingStatus,
-        userEmail: emails[r.user_id] ?? "",
-        userId: r.user_id,
-        rejectionReason: r.rejection_reason ?? undefined,
-      };
-    });
-    setBookings(rows);
-  }, [user, enrich]);
+
+    // 3. Merge: Database bookings + Local demo bookings (no duplicate IDs)
+    const map = new Map<string, SimBooking>();
+    for (const r of dbRows) map.set(r.id, r);
+    for (const r of demoList) map.set(r.id, r);
+
+    setBookings(Array.from(map.values()));
+  }, [enrich]);
 
   useEffect(() => {
     void refresh();
-  }, [refresh]);
+  }, [refresh, user?.id]);
 
-  // Realtime updates
+  // Realtime updates from Supabase when user has a real account
   useEffect(() => {
     if (!user || user.isDemo) return;
     const ch = supabase
@@ -168,41 +212,45 @@ export const BookingsProvider = ({ children }: { children: ReactNode }) => {
     };
   }, [user, refresh]);
 
-  const overlap = (aStart: string, aEnd: string, bStart: string, bEnd: string) =>
-    aStart < bEnd && bStart < aEnd;
-
   const hasConflict: BookingsContextValue["hasConflict"] = (spaceId, date, start, end, ignoreId) => {
     return bookings.some(
       (b) =>
         b.id !== ignoreId &&
         b.spaceId === spaceId &&
-        b.date === date &&
+        isDateCovered(b, date) &&
         (b.status === "approved" || b.status === "pending") &&
-        overlap(start, end, b.startTime, b.endTime)
+        timeOverlap(start, end, b.startTime, b.endTime)
     );
   };
 
   const createBooking: BookingsContextValue["createBooking"] = async (b, opts) => {
     if (hasConflict(b.spaceId, b.date, b.startTime, b.endTime)) {
-      return { ok: false, error: "This time slot conflicts with an existing booking." };
+      return {
+        ok: false,
+        error: "Someone has already booked this space for that date and time slot.",
+      };
     }
+
+    const status: BookingStatus = opts?.autoApprove ? "approved" : "pending";
+
+    // Demo user or unauthenticated: save locally in demo storage
     if (!user || user.isDemo) {
-      // demo mode: keep locally
       const booking: SimBooking = {
         ...b,
-        userId: user?.id,
-        id: `bk-${Date.now()}`,
-        status: opts?.autoApprove ? "approved" : "pending",
+        id: `bk-demo-${Date.now()}`,
+        userId: user?.id || "demo-user",
+        status,
       };
+
       setBookings((prev) => {
-        const n = [booking, ...prev];
-        saveDemo(n);
-        return n;
+        const next = [booking, ...prev.filter((x) => x.id !== booking.id)];
+        saveDemo(next);
+        return next;
       });
       return { ok: true, booking };
     }
 
-    const status: BookingStatus = opts?.autoApprove ? "approved" : "pending";
+    // Real Supabase user: insert into database
     const { data, error } = await supabase
       .from("bookings")
       .insert({
@@ -218,9 +266,10 @@ export const BookingsProvider = ({ children }: { children: ReactNode }) => {
       .single();
 
     if (error || !data) {
-      console.error("bookings insert", error);
+      console.error("bookings insert error", error);
       return { ok: false, error: error?.message || "Failed to create booking" };
     }
+
     await refresh();
     return { ok: true, booking: { ...b, id: data.id, status, userId: user.id } };
   };
@@ -228,96 +277,38 @@ export const BookingsProvider = ({ children }: { children: ReactNode }) => {
   const updateStatus: BookingsContextValue["updateStatus"] = async (id, status, reason) => {
     if (!user || user.isDemo) {
       setBookings((prev) => {
-        const n = prev.map((b) => (b.id === id ? { ...b, status, rejectionReason: reason } : b));
-        saveDemo(n);
-        return n;
+        const next = prev.map((b) => (b.id === id ? { ...b, status, rejectionReason: reason } : b));
+        saveDemo(next);
+        return next;
       });
-
-      // Move simulated money when a booking is approved in Demo Mode
-      if (status === "approved") {
-        const targetBooking = bookings.find((b) => b.id === id);
-        const price = 25000;
-
-        // Determine institution type and commission rate:
-        const instMeta = institutions.find((i) => i.id === targetBooking?.institutionId);
-        const instType = instMeta?.type || "other";
-
-        const commissionRates: Record<string, number> = {
-          hotel: 15,
-          airbnb: 15,
-          sports: 10,
-          university: 10,
-          garden: 5,
-          other: 10,
-        };
-        const commissionPct = commissionRates[instType] ?? 10;
-
-        const platformCut = Math.round((price * commissionPct) / 100);
-        const instCut = price - platformCut;
-        const instId = targetBooking?.institutionId || "inst-1";
-
-        const DEMO_WALLETS_KEY = "reservehub_demo_wallets_v2";
-        const DEMO_TXS_KEY = "reservehub_demo_txs_v2";
-        const stored = JSON.parse(localStorage.getItem(DEMO_WALLETS_KEY) || "{}");
-
-        const instKey = `institution:${instId}`;
-        const platKey = `platform:00000000-0000-0000-0000-000000000000`;
-
-        const instCurr = stored[instKey] || { balance: 100000, withdrawn: 0 };
-        const platCurr = stored[platKey] || { balance: 50000, withdrawn: 0 };
-
-        stored[instKey] = { ...instCurr, balance: instCurr.balance + instCut };
-        stored[platKey] = { ...platCurr, balance: platCurr.balance + platformCut };
-        localStorage.setItem(DEMO_WALLETS_KEY, JSON.stringify(stored));
-
-        const allTxs = JSON.parse(localStorage.getItem(DEMO_TXS_KEY) || "[]");
-        allTxs.unshift(
-          {
-            id: `tx-${Date.now()}-inst`,
-            wallet_owner_type: "institution",
-            wallet_owner_id: instId,
-            amount: instCut,
-            direction: "credit",
-            kind: "payout",
-            note: `Booking payout after ${commissionPct}% commission`,
-            institution_type: instType,
-            created_at: new Date().toISOString(),
-          },
-          {
-            id: `tx-${Date.now()}-plat`,
-            wallet_owner_type: "platform",
-            wallet_owner_id: "00000000-0000-0000-0000-000000000000",
-            amount: platformCut,
-            direction: "credit",
-            kind: "commission",
-            note: `${commissionPct}% commission (${instType})`,
-            institution_type: instType,
-            created_at: new Date().toISOString(),
-          }
-        );
-        localStorage.setItem(DEMO_TXS_KEY, JSON.stringify(allTxs));
-        toast({ title: `Booking approved · ${commissionPct}% commission credited to Super Admin!` });
-      }
       return;
     }
 
     if (status === "approved") {
       const { error } = await (supabase as any).rpc("approve_booking_with_payment", { _booking_id: id });
       await refresh();
-      if (error) toast({ title: "Approval failed", description: error.message, variant: "destructive" });
+      if (error) {
+        toast({ title: "Approval failed", description: error.message, variant: "destructive" });
+      }
       return;
     }
+
     const { error } = await supabase
       .from("bookings")
       .update({ status, rejection_reason: reason ?? null })
       .eq("id", id);
+
     await refresh();
-    if (error) toast({ title: "Could not update booking", description: error.message, variant: "destructive" });
+    if (error) {
+      toast({ title: "Could not update booking", description: error.message, variant: "destructive" });
+    }
   };
 
   const cancelBooking = async (id: string) => updateStatus(id, "cancelled");
 
-  const getBookingsForSpace = (spaceId: string) => bookings.filter((b) => b.spaceId === spaceId);
+  const getBookingsForSpace = (spaceId: string) => {
+    return bookings.filter((b) => b.spaceId === spaceId);
+  };
 
   return (
     <Ctx.Provider
@@ -328,6 +319,7 @@ export const BookingsProvider = ({ children }: { children: ReactNode }) => {
         cancelBooking,
         hasConflict,
         getBookingsForSpace,
+        refresh,
       }}
     >
       {children}

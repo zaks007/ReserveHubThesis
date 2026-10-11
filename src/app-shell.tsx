@@ -68,6 +68,8 @@ export function AppShell() {
                   <Route path="/auth/signup/user" element={<SignupUser />} />
                   <Route path="/auth/signup" element={<Signup />} />
                   <Route path="/auth/signup/user" element={<SignupUser />} />
+                  <Route path="/institutions/:id/spaces/:spaceId" element={<SpaceDetail />} />
+
                   <Route path="/auth/signup/teacher" element={<SignupTeacher />} />
                   <Route path="/auth/signup/institution" element={<SignupInstitution />} />
 
