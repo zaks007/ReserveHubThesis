@@ -12,13 +12,13 @@ const options = [
     to: "/auth/signup/teacher",
     icon: GraduationCap,
     title: "University Teacher / Official",
-    desc: "Sign up with your @unideb.hu or @mailbox.unideb.hu email to get free, instant booking of seminar rooms and lecture halls.",
+    desc: "Register with your @unideb.hu email for instant booking of seminar rooms and lecture halls at University of Debrecen.",
   },
   {
     to: "/auth/signup/institution",
     icon: Building2,
     title: "Institution",
-    desc: "Register your hotel, university, sports facility, garden or stays. Requires Super Admin approval.",
+    desc: "Register your hotel, sports facility, community garden, or stays. Requires Super Admin approval.",
   },
 ];
 
@@ -27,11 +27,9 @@ const Signup = () => {
   return (
     <div className="container max-w-3xl py-12">
       <h1 className="text-3xl font-bold text-center mb-2">Create your account</h1>
-      <p className="text-center text-muted-foreground mb-10">
-        Choose how you'd like to join ReserveHub.
-      </p>
+      <p className="text-center text-muted-foreground mb-10">Choose how you'd like to join ReserveHub.</p>
       <div className="grid gap-4">
-        {options.map((o) => (
+        {options.map(o => (
           <button
             key={o.to}
             onClick={() => navigate(o.to)}

@@ -12,7 +12,6 @@ export interface PaymentMethod {
   last4: string;
   expMonth: string;
   expYear: string;
-  /** Not stored in DB — UI-only placeholder for the prototype */
   cvc?: string;
   isDefault: boolean;
   createdAt: string;
@@ -26,6 +25,11 @@ interface Ctx {
 }
 
 const PaymentCtx = createContext<Ctx | null>(null);
+
+const DEMO_CARDS_KEY = "reservehub_demo_cards_v1";
+
+const isUuid = (val?: string) =>
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val ?? "");
 
 export const detectBrand = (num: string): CardBrand => {
   const n = num.replace(/\s/g, "");
@@ -55,6 +59,30 @@ export const PaymentMethodsProvider = ({ children }: { children: ReactNode }) =>
 
   const refresh = useCallback(async () => {
     if (!user) { setMethods([]); return; }
+
+    // If demo account or non-UUID, read from localStorage to avoid HTTP 400
+    if (user.isDemo || !isUuid(user.id)) {
+      try {
+        const raw = localStorage.getItem(`${DEMO_CARDS_KEY}_${user.id}`);
+        setMethods(raw ? JSON.parse(raw) : [
+          {
+            id: "demo-card-1",
+            userId: user.id,
+            cardholder: user.name || "Demo Cardholder",
+            brand: "visa",
+            last4: "4242",
+            expMonth: "12",
+            expYear: "28",
+            isDefault: true,
+            createdAt: new Date().toISOString(),
+          }
+        ]);
+      } catch {
+        setMethods([]);
+      }
+      return;
+    }
+
     const { data, error } = await supabase
       .from("payment_methods")
       .select("*")
@@ -70,6 +98,27 @@ export const PaymentMethodsProvider = ({ children }: { children: ReactNode }) =>
     if (!user) return;
     const hasAny = methods.length > 0;
     const wantDefault = m.isDefault || !hasAny;
+
+    if (user.isDemo || !isUuid(user.id)) {
+      const newCard: PaymentMethod = {
+        id: `demo-card-${Date.now()}`,
+        userId: user.id,
+        cardholder: m.cardholder,
+        brand: m.brand,
+        last4: m.last4,
+        expMonth: m.expMonth,
+        expYear: m.expYear,
+        isDefault: wantDefault,
+        createdAt: new Date().toISOString(),
+      };
+      const updated = wantDefault
+        ? [...methods.map(c => ({ ...c, isDefault: false })), newCard]
+        : [...methods, newCard];
+      localStorage.setItem(`${DEMO_CARDS_KEY}_${user.id}`, JSON.stringify(updated));
+      setMethods(updated);
+      return;
+    }
+
     if (wantDefault && hasAny) {
       await supabase.from("payment_methods").update({ is_default: false }).eq("user_id", user.id);
     }
@@ -88,6 +137,16 @@ export const PaymentMethodsProvider = ({ children }: { children: ReactNode }) =>
 
   const removeMethod: Ctx["removeMethod"] = async (id) => {
     if (!user) return;
+    if (user.isDemo || !isUuid(user.id)) {
+      const remaining = methods.filter(m => m.id !== id);
+      if (remaining.length > 0 && !remaining.some(m => m.isDefault)) {
+        remaining[0].isDefault = true;
+      }
+      localStorage.setItem(`${DEMO_CARDS_KEY}_${user.id}`, JSON.stringify(remaining));
+      setMethods(remaining);
+      return;
+    }
+
     const target = methods.find(m => m.id === id);
     const { error } = await supabase.from("payment_methods").delete().eq("id", id);
     if (error) { console.error("payment_methods delete", error); return; }
@@ -102,6 +161,13 @@ export const PaymentMethodsProvider = ({ children }: { children: ReactNode }) =>
 
   const setDefault: Ctx["setDefault"] = async (id) => {
     if (!user) return;
+    if (user.isDemo || !isUuid(user.id)) {
+      const updated = methods.map(m => ({ ...m, isDefault: m.id === id }));
+      localStorage.setItem(`${DEMO_CARDS_KEY}_${user.id}`, JSON.stringify(updated));
+      setMethods(updated);
+      return;
+    }
+
     await supabase.from("payment_methods").update({ is_default: false }).eq("user_id", user.id);
     await supabase.from("payment_methods").update({ is_default: true }).eq("id", id);
     await refresh();

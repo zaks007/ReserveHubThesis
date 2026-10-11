@@ -92,10 +92,10 @@ const AccountSettings = () => {
                       {brandLabel[m.brand].slice(0, 4)}
                     </div>
                     <div>
-                      <p className="font-medium text-sm flex items-center gap-2">
+                      <div className="font-medium text-sm flex items-center gap-2">
                         {brandLabel[m.brand]} •••• {m.last4}
                         {m.isDefault && <Badge variant="secondary" className="text-[10px]">Default</Badge>}
-                      </p>
+                      </div>
                       <p className="text-xs text-muted-foreground">{m.cardholder} · exp {m.expMonth}/{m.expYear}</p>
                     </div>
                   </div>

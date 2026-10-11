@@ -1,4 +1,4 @@
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -6,119 +6,144 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/contexts/AuthContext";
 import { toast } from "@/hooks/use-toast";
 
+const calculateAge = (birthDateString: string): number => {
+  const today = new Date();
+  const birthDate = new Date(birthDateString);
+  let age = today.getFullYear() - birthDate.getFullYear();
+  const m = today.getMonth() - birthDate.getMonth();
+  if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+    age--;
+  }
+  return age;
+};
+
 const SignupUser = () => {
   const { signupUser } = useAuth();
   const navigate = useNavigate();
+
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [dob, setDob] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  const isAdult = (d: string) => {
-    const b = new Date(d);
-    if (isNaN(b.getTime())) return false;
-    const t = new Date();
-    let age = t.getFullYear() - b.getFullYear();
-    if (
-      t.getMonth() < b.getMonth() ||
-      (t.getMonth() === b.getMonth() && t.getDate() < b.getDate())
-    ) {
-      age--;
-    }
-    return age >= 18;
-  };
-
-  const submit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    if (!name || !email || !dob) {
-      toast({
-        title: "Name, email, and date of birth are required",
-        variant: "destructive",
-      });
+    if (!name.trim()) {
+      toast({ title: "Name is required", variant: "destructive" });
       return;
     }
 
-    if (!isAdult(dob)) {
+    if (!dob) {
+      toast({ title: "Date of birth required", description: "You must enter your date of birth to sign up.", variant: "destructive" });
+      return;
+    }
+
+    const age = calculateAge(dob);
+    if (age < 18) {
       toast({
-        title: "You must be 18 or older to sign up",
-        description: "You can keep browsing and viewing listings as a guest.",
+        title: "Registration restricted (18+ only)",
+        description: "You must be at least 18 years old to create a registered account. You can continue exploring ReserveHub as a guest.",
         variant: "destructive",
       });
       navigate("/");
       return;
     }
 
+    if (!password || password.length < 6) {
+      toast({ title: "Password required", description: "Password must be at least 6 characters.", variant: "destructive" });
+      return;
+    }
+
+    setSubmitting(true);
     try {
-      await signupUser(email, name, password);
+      await signupUser(email.trim(), name.trim(), password);
       toast({
-        title: "Check your email",
+        title: "Code sent",
         description: `We sent a 6-digit verification code to ${email}.`,
       });
       navigate("/auth/verify");
     } catch (err: any) {
       toast({
-        title: "Could not send code",
-        description: err?.message ?? "Please try again",
+        title: "Signup failed",
+        description: err?.message || "Could not start registration.",
         variant: "destructive",
       });
+    } finally {
+      setSubmitting(false);
     }
   };
 
   return (
     <div className="container max-w-md py-12">
-      <div className="bg-card border rounded-xl p-8">
-        <h1 className="text-2xl font-bold mb-1">Sign up as a User</h1>
+      <div className="bg-card border rounded-xl p-8 shadow-sm">
+        <h1 className="text-2xl font-bold mb-1">Create user account</h1>
         <p className="text-sm text-muted-foreground mb-6">
-          Browse and book spaces. You must be 18+ to register an account.
+          Sign up with your credentials. We'll send a 6-digit confirmation code to verify your email.
         </p>
-        <form onSubmit={submit} className="space-y-4" autoComplete="off">
-          <div>
-            <Label htmlFor="name">Full name</Label>
+
+        <form onSubmit={handleSubmit} className="space-y-4" autoComplete="off">
+          <div className="space-y-1.5">
+            <Label htmlFor="signup-name">Full name</Label>
             <Input
-              id="name"
+              id="signup-name"
+              required
+              autoComplete="off"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="mt-1"
-              autoComplete="off"
             />
           </div>
-          <div>
-            <Label htmlFor="email">Email</Label>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="signup-email">Email</Label>
             <Input
-              id="email"
+              id="signup-email"
               type="email"
+              required
+              autoComplete="off"
+              placeholder="you@example.com"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="mt-1"
-              autoComplete="off"
             />
           </div>
-          <div>
-            <Label htmlFor="dob">Date of birth (18+ only)</Label>
+
+          <div className="space-y-1.5">
+            <Label htmlFor="signup-password">Password</Label>
             <Input
-              id="dob"
-              type="date"
-              value={dob}
-              max={new Date().toISOString().slice(0, 10)}
-              onChange={(e) => setDob(e.target.value)}
-              className="mt-1"
-            />
-          </div>
-          <div>
-            <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
+              id="signup-password"
               type="password"
+              required
+              minLength={6}
+              autoComplete="new-password"
+              placeholder="At least 6 characters"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="mt-1"
             />
           </div>
-          <Button type="submit" className="w-full">
-            Send verification code
+
+          <div className="space-y-1.5">
+            <Label htmlFor="signup-dob">Date of birth (18+ only)</Label>
+            <Input
+              id="signup-dob"
+              type="date"
+              required
+              value={dob}
+              onChange={(e) => setDob(e.target.value)}
+            />
+          </div>
+
+          <Button type="submit" className="w-full mt-2" disabled={submitting}>
+            {submitting ? "Sending verification code…" : "Sign Up & Send Code"}
           </Button>
         </form>
+
+        <p className="text-center text-sm text-muted-foreground mt-6">
+          Already have an account?{" "}
+          <Link to="/auth/login" className="text-primary font-medium hover:underline">
+            Log in
+          </Link>
+        </p>
       </div>
     </div>
   );
