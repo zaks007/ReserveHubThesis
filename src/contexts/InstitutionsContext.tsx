@@ -5,8 +5,8 @@ import hotelDivinusAsset from "@/assets/hotel-divinus.png.asset.json";
 
 export type SaveMode = "db" | "local";
 export type InstitutionPatch = Partial<
-  Pick<Institution, "name" | "description" | "city" | "rating" | "image" | "images" | "address">
->;
+  Pick<Institution, "name" | "description" | "city" | "rating" | "image" | "images" | "address" | "mapsUrl">
+> & { maps_url?: string | null };
 
 interface InstitutionsContextValue {
   institutions: Institution[];
@@ -30,6 +30,7 @@ export interface NewInstitution {
   city: string;
   description?: string;
   address?: string;
+  mapsUrl?: string;
   image?: string;
   images?: string[];
   rating?: number;
@@ -93,7 +94,6 @@ function transformDbInstitution(inst: any, campuses: Campus[] = [], buildings: B
     ? inst.images
     : (Array.isArray(inst.image_urls) && inst.image_urls.length > 0 ? inst.image_urls : []);
 
-  // Use uploaded images first; only fallback to the asset if no custom images were uploaded
   const mainImage = rawImages[0] || inst.image_url || (isHotelDivinus ? hotelDivinusAsset.url : "");
   const images = rawImages.length > 0 ? rawImages : (mainImage ? [mainImage] : []);
 
@@ -102,20 +102,22 @@ function transformDbInstitution(inst: any, campuses: Campus[] = [], buildings: B
     name: inst.name,
     type: inst.type,
     city: inst.city,
+    address: inst.address || undefined,
+    mapsUrl: inst.maps_url || undefined,
     description: inst.description || "",
     image: mainImage,
     images,
-    rating: isHotelDivinus ? (inst.rating ?? 5) : (inst.rating ?? 0),
+    rating: Number(inst.rating) || 0,
     coords: inst.lat && inst.lng ? { lat: Number(inst.lat), lng: Number(inst.lng) } : undefined,
-    address: inst.address || undefined,
-    campuses: campuses.length > 0 ? campuses : undefined,
-    buildings: buildings.length > 0 ? buildings : [],
+    campuses,
+    buildings,
   };
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const CREATED_KEY = "reservehub_local_institutions_v1";
 const DELETED_KEY = "reservehub_deleted_institutions_v1";
+
 const loadJson = <T,>(k: string, fallback: T): T => {
   try { const raw = localStorage.getItem(k); return raw ? JSON.parse(raw) : fallback; } catch { return fallback; }
 };
@@ -197,6 +199,9 @@ export const InstitutionsProvider = ({ children }: { children: ReactNode }) => {
     if (p.city !== undefined) r.city = p.city;
     if (p.description !== undefined) r.description = p.description;
     if (p.address !== undefined) r.address = p.address || null;
+    if ((p as any).mapsUrl !== undefined || (p as any).maps_url !== undefined) {
+      r.maps_url = (p as any).mapsUrl || (p as any).maps_url || null;
+    }
     if (p.image !== undefined) r.image_url = p.image || null;
     if (p.images !== undefined) {
       r.images = p.images;
@@ -229,11 +234,31 @@ export const InstitutionsProvider = ({ children }: { children: ReactNode }) => {
       }
       if (isDbRow(id)) {
         const row = toRow(patch);
-        const { data, error } = await supabase
+        let { data, error } = await supabase
           .from("institutions")
           .update(row as any)
           .eq("id", id)
           .select("id");
+
+        // If table is missing maps_url or images column, retry with base columns
+        if (error && (error.message?.includes("column") || (error as any).code === "42703")) {
+          console.warn("Retrying Supabase institution update without optional columns:", error.message);
+          const safeRow: Record<string, unknown> = { ...row };
+          delete safeRow.maps_url;
+          delete safeRow.images;
+          const retry = await supabase
+            .from("institutions")
+            .update(safeRow as any)
+            .eq("id", id)
+            .select("id");
+          data = retry.data;
+          error = retry.error;
+        }
+
+        if (error) {
+          console.error("Failed to update institution in Supabase:", error);
+        }
+
         if (!error && data && data.length > 0) {
           setReloadKey((k) => k + 1);
           return "db";
@@ -263,6 +288,7 @@ export const InstitutionsProvider = ({ children }: { children: ReactNode }) => {
         city: data.city,
         description: data.description || "",
         address: data.address || undefined,
+        mapsUrl: data.mapsUrl || undefined,
         image: imagesList[0] || data.image || "",
         images: imagesList,
         rating: data.rating ?? 0,
@@ -277,29 +303,14 @@ export const InstitutionsProvider = ({ children }: { children: ReactNode }) => {
         return "local";
       }
       if (isDbRow(id)) {
-        const { data, error } = await supabase.from("institutions").delete().eq("id", id).select("id");
-        if (!error && data && data.length > 0) {
+        const { error } = await supabase.from("institutions").delete().eq("id", id);
+        if (!error) {
           setReloadKey((k) => k + 1);
           return "db";
         }
       }
-      setLocalDeleted((prev) => (prev.includes(id) ? prev : [...prev, id]));
+      setLocalDeleted((prev) => [...prev, id]);
       return "local";
-    },
-    saveRow: async (table, id, row) => {
-      const q = id
-        ? supabase.from(table).update(row as any).eq("id", id).select("id")
-        : supabase.from(table).insert(row as any).select("id");
-      const { data, error } = await q;
-      if (error) throw new Error(error.message);
-      if (!data || data.length === 0) throw new Error(NOT_SAVED);
-      setReloadKey((k) => k + 1);
-    },
-    deleteRow: async (table, id) => {
-      const { data, error } = await supabase.from(table).delete().eq("id", id).select("id");
-      if (error) throw new Error(error.message);
-      if (!data || data.length === 0) throw new Error(NOT_SAVED);
-      setReloadKey((k) => k + 1);
     },
     resetInstitution: (id) => {
       setOverrides((prev) => {
@@ -307,7 +318,23 @@ export const InstitutionsProvider = ({ children }: { children: ReactNode }) => {
         delete next[id];
         return next;
       });
-      setLocalDeleted((prev) => prev.filter((x) => x !== id));
+    },
+    saveRow: async (table, id, row) => {
+      if (!usingDatabase) throw new Error("Offline demo mode — cannot save row to database.");
+      if (id) {
+        const { error } = await (supabase as any).from(table).update(row).eq("id", id);
+        if (error) throw new Error(`${NOT_SAVED} (${error.message})`);
+      } else {
+        const { error } = await (supabase as any).from(table).insert(row);
+        if (error) throw new Error(`${NOT_SAVED} (${error.message})`);
+      }
+      setReloadKey((k) => k + 1);
+    },
+    deleteRow: async (table, id) => {
+      if (!usingDatabase) throw new Error("Offline demo mode — cannot delete row from database.");
+      const { error } = await (supabase as any).from(table).delete().eq("id", id);
+      if (error) throw new Error(`${NOT_SAVED} (${error.message})`);
+      setReloadKey((k) => k + 1);
     },
   };
 

@@ -68,7 +68,6 @@ const Login = () => {
                 type="email"
                 required
                 autoComplete="email"
-                
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className="pl-9"
@@ -85,11 +84,18 @@ const Login = () => {
                 type="password"
                 required
                 autoComplete="current-password"
-               
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className="pl-9"
               />
+            </div>
+            <div className="flex justify-end pt-1">
+              <Link
+                to="/auth/forgot-password"
+                className="text-xs font-medium text-primary hover:underline"
+              >
+                Forgot password?
+              </Link>
             </div>
           </div>
 

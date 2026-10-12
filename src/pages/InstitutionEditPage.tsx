@@ -42,9 +42,12 @@ const InstitutionEditPage = () => {
 
   useEffect(() => {
     if (institution) {
-      const imgs = institution.images && institution.images.length > 0
-        ? institution.images
-        : (institution.image ? [institution.image] : []);
+      const imgs =
+        institution.images && institution.images.length > 0
+          ? institution.images
+          : institution.image
+          ? [institution.image]
+          : [];
       setForm({
         name: institution.name,
         type: institution.type,
@@ -60,18 +63,30 @@ const InstitutionEditPage = () => {
   }, [institution?.id]);
 
   if (loading) return <div className="container py-16 text-center text-muted-foreground">Checking your account…</div>;
-  if (!user || user.role !== "super_admin") return <Navigate to="/" replace />;
+
+  const isSuper = user?.role === "super_admin";
+  const isInstAdmin =
+    user?.role === "institution_admin" &&
+    (user.institutionId === id || user.institutionType === institution?.type || !id);
+
+  if (!user || (!isSuper && !isInstAdmin)) return <Navigate to="/" replace />;
+
   if (!isNew && !institution) {
     return (
       <div className="container py-16 text-center">
         <p className="text-muted-foreground mb-4">Institution not found.</p>
-        <Button asChild variant="outline"><Link to="/admin/super">Back to dashboard</Link></Button>
+        <Button asChild variant="outline">
+          <Link to={isSuper ? "/admin/super" : "/admin/institution"}>Back to dashboard</Link>
+        </Button>
       </div>
     );
   }
 
+  const backUrl = isSuper ? "/admin/super" : "/admin/institution";
   const set = (k: keyof typeof empty, v: any) => setForm((f) => ({ ...f, [k]: v }));
-  const typeOptions = Object.entries(typeLabelMap).filter(([k]) => k !== "university" || institution?.type === "university");
+  const typeOptions = Object.entries(typeLabelMap).filter(
+    ([k]) => k !== "university" || institution?.type === "university"
+  );
 
   const save = async () => {
     if (!form.name.trim() || !form.city.trim()) {
@@ -80,13 +95,15 @@ const InstitutionEditPage = () => {
     }
     setSaving(true);
     try {
-      const imagesList = form.images && form.images.length > 0 ? form.images : (form.image ? [form.image] : []);
+      const imagesList =
+        form.images && form.images.length > 0 ? form.images : form.image ? [form.image] : [];
       const cover = imagesList[0] || form.image || "";
       const data = {
         ...form,
         image: cover,
         images: imagesList,
-        maps_url: form.mapsUrl || null,
+        maps_url: form.mapsUrl || undefined,
+        mapsUrl: form.mapsUrl || undefined,
         rating: Number(form.rating) || 0,
       };
       const mode = isNew ? await createInstitution(data) : await updateInstitution(id!, data);
@@ -94,7 +111,7 @@ const InstitutionEditPage = () => {
         title: isNew ? "Institution added" : "Changes saved",
         description: mode === "local" ? "Saved in browser storage (database was offline or demo row)." : form.name,
       });
-      navigate("/admin/super");
+      navigate(backUrl);
     } catch (e: any) {
       toast({ title: "Could not save", description: e.message, variant: "destructive" });
     } finally {
@@ -104,34 +121,71 @@ const InstitutionEditPage = () => {
 
   return (
     <div className="container py-8 max-w-4xl">
-      <Link to="/admin/super" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4">
-        <ArrowLeft className="h-4 w-4" /> Back to Super Admin
+      <Link
+        to={backUrl}
+        className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground mb-4"
+      >
+        <ArrowLeft className="h-4 w-4" /> Back to {isSuper ? "Super Admin" : "Dashboard"}
       </Link>
       <h1 className="text-3xl font-bold mb-6">{isNew ? "Add institution" : `Edit ${institution!.name}`}</h1>
 
       <section className="bg-card border rounded-xl p-6 mb-8">
         <h2 className="text-xl font-semibold mb-4">Details</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <Field label="Name *"><Input value={form.name} onChange={(e) => set("name", e.target.value)} /></Field>
+          <Field label="Name *">
+            <Input value={form.name} onChange={(e) => set("name", e.target.value)} />
+          </Field>
           <Field label="Type">
-            <select className="w-full h-10 rounded-md border bg-background px-3 text-sm" value={form.type} onChange={(e) => set("type", e.target.value)}>
-              {typeOptions.map(([k, v]) => <option key={k} value={k}>{v as string}</option>)}
+            <select
+              className="w-full h-10 rounded-md border bg-background px-3 text-sm"
+              value={form.type}
+              onChange={(e) => set("type", e.target.value)}
+              disabled={!isSuper}
+            >
+              {typeOptions.map(([k, v]) => (
+                <option key={k} value={k}>
+                  {v as string}
+                </option>
+              ))}
             </select>
           </Field>
-          <Field label="City *"><Input value={form.city} onChange={(e) => set("city", e.target.value)} /></Field>
-          <Field label="Address"><Input placeholder="e.g. Egyetem tér 1, 4032 Debrecen" value={form.address} onChange={(e) => set("address", e.target.value)} /></Field>
+          <Field label="City *">
+            <Input value={form.city} onChange={(e) => set("city", e.target.value)} />
+          </Field>
+          <Field label="Address">
+            <Input
+              value={form.address}
+              onChange={(e) => set("address", e.target.value)}
+            />
+          </Field>
           <div className="md:col-span-2">
             <Field label="Google Maps Link (optional)">
               <Input
-                placeholder="https://maps.app.goo.gl/... or https://www.google.com/maps/..."
                 value={form.mapsUrl}
                 onChange={(e) => set("mapsUrl", e.target.value)}
               />
             </Field>
           </div>
-          <Field label="Rating (0–5)"><Input type="number" min={0} max={5} step={0.1} value={form.rating} onChange={(e) => set("rating", e.target.value)} /></Field>
+          {isSuper && (
+            <Field label="Rating (0–5)">
+              <Input
+                type="number"
+                min={0}
+                max={5}
+                step={0.1}
+                value={form.rating}
+                onChange={(e) => set("rating", e.target.value)}
+              />
+            </Field>
+          )}
           <div className="md:col-span-2">
-            <Field label="Description"><Textarea rows={4} value={form.description} onChange={(e) => set("description", e.target.value)} /></Field>
+            <Field label="Description">
+              <Textarea
+                rows={4}
+                value={form.description}
+                onChange={(e) => set("description", e.target.value)}
+              />
+            </Field>
           </div>
           <div className="md:col-span-2">
             <Field label="Photos (first photo is used as main cover)">
@@ -146,18 +200,21 @@ const InstitutionEditPage = () => {
           </div>
         </div>
         <div className="flex justify-end gap-2 mt-6">
-          <Button variant="outline" onClick={() => navigate("/admin/super")} disabled={saving}>Cancel</Button>
-          <Button onClick={save} disabled={saving}>{saving ? "Saving…" : "Save"}</Button>
+          <Button variant="outline" onClick={() => navigate(backUrl)} disabled={saving}>
+            Cancel
+          </Button>
+          <Button onClick={save} disabled={saving}>
+            {saving ? "Saving…" : "Save"}
+          </Button>
         </div>
       </section>
 
       {institution && (
         <section className="mb-8">
-          <h2 className="text-xl font-semibold mb-4">Campuses, buildings & rooms</h2>
+          <h2 className="text-xl font-semibold mb-4">Structure</h2>
           <InstitutionStructureEditor institution={institution} />
         </section>
       )}
-      {isNew && <p className="text-sm text-muted-foreground">Save first — you can add buildings and rooms by editing the institution afterwards.</p>}
     </div>
   );
 };

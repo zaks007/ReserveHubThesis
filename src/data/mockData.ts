@@ -18,9 +18,11 @@ export interface Institution {
   rating: number;
   coords?: Coords;
   address?: string;
+  mapsUrl?: string;
   campuses?: Campus[];
   buildings: Building[];
 }
+
 
 export interface Campus {
   id: string;

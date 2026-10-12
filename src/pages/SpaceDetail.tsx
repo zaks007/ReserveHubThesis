@@ -1,5 +1,5 @@
 import { useParams, useNavigate } from "react-router-dom";
-import { Users, Check, Clock, DollarSign, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
+import { Users, Check, Clock, DollarSign, AlertCircle, ChevronLeft, ChevronRight, ShieldCheck } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -448,9 +448,17 @@ const SpaceDetail = () => {
               )}
 
               {effectivePrice > 0 && totalPrice > 0 && !conflictMessage && (
-                <div className="rounded-lg bg-secondary/60 px-3 py-2 text-sm flex items-center justify-between">
-                  <span className="text-muted-foreground">Estimated total</span>
-                  <span className="font-bold">{totalPrice.toLocaleString()} HUF</span>
+                <div className="space-y-2">
+                  <div className="rounded-lg bg-secondary/60 px-3 py-2 text-sm flex items-center justify-between">
+                    <span className="text-muted-foreground">Estimated total</span>
+                    <span className="font-bold">{totalPrice.toLocaleString()} HUF</span>
+                  </div>
+                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-2.5 text-xs text-muted-foreground flex items-start gap-2">
+                    <ShieldCheck className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                    <span>
+                      <strong className="text-foreground">Payment Protection:</strong> You will not be debited now. Charges are only processed after your booking is approved by the host.
+                    </span>
+                  </div>
                 </div>
               )}
 

@@ -26,7 +26,12 @@ const InstitutionDetail = () => {
     );
   }
 
-  const hasCampuses = (institution.campuses?.length ?? 0) > 0;
+  const isDirectSpaces =
+    institution.type === "hotel" ||
+    institution.type === "garden" ||
+    institution.type === "airbnb";
+
+  const hasCampuses = institution.type === "university" && (institution.campuses?.length ?? 0) > 0;
   const selectedCampus = hasCampuses && selectedCampusId
     ? institution.campuses!.find((c) => c.id === selectedCampusId)
     : undefined;
@@ -70,6 +75,17 @@ const InstitutionDetail = () => {
     }];
     mapTitle = "Location";
   }
+
+  const directSpaces: Space[] = isDirectSpaces
+    ? institution.buildings.flatMap((b) => b.spaces)
+    : [];
+
+  const directSpacesTitle =
+    institution.type === "hotel"
+      ? "Rooms & Suites"
+      : institution.type === "garden"
+      ? "Garden Plots"
+      : "Units & Listings";
 
   return (
     <div className="container py-4">
@@ -154,39 +170,63 @@ const InstitutionDetail = () => {
         </div>
       )}
 
-      {(() => {
-        const buildingsToRender = selectedCampus
-          ? selectedCampus.buildings
-          : hasCampuses
-          ? []
-          : institution.buildings;
+      {/* Direct Spaces Layout for Hotel, Garden, Airbnb */}
+      {isDirectSpaces && (
+        <div className="bg-card border rounded-xl p-6">
+          <h2 className="text-2xl font-bold mb-4">{directSpacesTitle}</h2>
+          {directSpaces.length === 0 ? (
+            <p className="text-muted-foreground">No available spaces listed currently.</p>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {directSpaces.map((space) => (
+                <SpaceCard
+                  key={space.id}
+                  space={space}
+                  institutionId={institution.id}
+                  institutionType={institution.type}
+                />
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
-        if (buildingsToRender.length === 0 && !hasCampuses) {
-          return <p className="text-muted-foreground">No spaces available at this institution.</p>;
-        }
+      {/* Hierarchical Layout for Sports Facility and University */}
+      {!isDirectSpaces && (
+        (() => {
+          const buildingsToRender = selectedCampus
+            ? selectedCampus.buildings
+            : hasCampuses
+            ? []
+            : institution.buildings;
 
-        return (
-          <div className="space-y-8">
-            {buildingsToRender.map((building) => (
-              <div key={building.id} className="bg-card border rounded-xl p-6">
-                <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-                  <Building2 className="h-5 w-5 text-primary" /> {building.name}
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {building.spaces.map((space) => (
-                    <SpaceCard
-                      key={space.id}
-                      space={space}
-                      institutionId={institution.id}
-                      institutionType={institution.type}
-                    />
-                  ))}
+          if (buildingsToRender.length === 0 && !hasCampuses) {
+            return <p className="text-muted-foreground">No spaces available at this institution.</p>;
+          }
+
+          return (
+            <div className="space-y-8">
+              {buildingsToRender.map((building) => (
+                <div key={building.id} className="bg-card border rounded-xl p-6">
+                  <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
+                    <Building2 className="h-5 w-5 text-primary" /> {building.name}
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {building.spaces.map((space) => (
+                      <SpaceCard
+                        key={space.id}
+                        space={space}
+                        institutionId={institution.id}
+                        institutionType={institution.type}
+                      />
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
-        );
-      })()}
+              ))}
+            </div>
+          );
+        })()
+      )}
     </div>
   );
 };
