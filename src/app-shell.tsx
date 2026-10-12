@@ -46,38 +46,38 @@ export function AppShell() {
               <PaymentMethodsProvider>
                 <Navbar />
                 <Routes>
+                  {/* Public pages */}
                   <Route path="/" element={<Index />} />
-                  <Route path="/account" element={<AccountSettings />} />
-                  <Route path="/account/cards/new" element={<AddCard />} />
-                  <Route path="/wallet" element={<Wallet />} />
                   <Route path="/institutions" element={<InstitutionList />} />
                   <Route path="/institutions/:id" element={<InstitutionDetail />} />
+                  <Route path="/institutions/:id/spaces/:spaceId" element={<SpaceDetail />} />
                   <Route path="/spaces/:spaceId" element={<SpaceDetail />} />
+
+                  {/* Signed-in user pages */}
                   <Route path="/my-bookings" element={<MyBookings />} />
+                  <Route path="/wallet" element={<Wallet />} />
+                  <Route path="/account" element={<AccountSettings />} />
+                  <Route path="/account/cards/new" element={<AddCard />} />
+
+                  {/* Role dashboards */}
                   <Route path="/admin" element={<AdminDashboard />} />
                   <Route path="/admin/institution" element={<InstitutionAdminDashboard />} />
                   <Route path="/admin/campus" element={<CampusAdminDashboard />} />
-                  <Route path="/admin/super" element={<SuperAdminDashboard />} />
-                  <Route path="/admin/campus" element={<CampusAdminDashboard />} />
                   <Route path="/admin/teacher" element={<TeacherDashboard />} />
-
-
+                  <Route path="/admin/super" element={<SuperAdminDashboard />} />
                   <Route path="/admin/institutions/new" element={<InstitutionEditPage />} />
                   <Route path="/admin/institutions/:id/edit" element={<InstitutionEditPage />} />
-                  <Route path="/auth/signup" element={<Signup />} />
-                  <Route path="/auth/signup/user" element={<SignupUser />} />
-                  <Route path="/auth/signup" element={<Signup />} />
-                  <Route path="/auth/signup/user" element={<SignupUser />} />
-                  <Route path="/institutions/:id/spaces/:spaceId" element={<SpaceDetail />} />
 
+                  {/* Authentication */}
+                  <Route path="/auth/login" element={<Login />} />
+                  <Route path="/auth/signup" element={<Signup />} />
+                  <Route path="/auth/signup/user" element={<SignupUser />} />
                   <Route path="/auth/signup/teacher" element={<SignupTeacher />} />
-                  <Route path="/auth/signup/institution" element={<SignupInstitution />} />
-
                   <Route path="/auth/signup/institution" element={<SignupInstitution />} />
                   <Route path="/auth/signup/super-admin" element={<SignupSuperAdmin />} />
                   <Route path="/auth/verify" element={<Verify />} />
                   <Route path="/auth/callback" element={<AuthCallback />} />
-                  <Route path="/auth/login" element={<Login />} />
+
                   <Route path="*" element={<NotFound />} />
                 </Routes>
                 <DevRoleSwitcher />

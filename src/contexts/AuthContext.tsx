@@ -152,6 +152,20 @@ async function loadUserFromSession(session: Session, superAdminEmails: string[])
     if (prof?.name) name = prof.name;
   } catch { /* ignore */ }
 
+  // A regular user with a still-pending institution request is "institution_pending"
+  if (role === "user" && !allowlisted) {
+    try {
+      const { data: reqRow } = await (supabase as any)
+        .from("institution_requests")
+        .select("status")
+        .eq("requester_user_id", session.user.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (reqRow?.status === "pending") role = "institution_pending";
+    } catch { /* ignore */ }
+  }
+
   let institutionId: string | undefined;
   let institutionType: string | undefined;
   if (role === "institution_admin") {
@@ -238,6 +252,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!demoRef.current) {
           const u = await loadUserFromSession(session, superAdminEmails);
           if (!demoRef.current) setUser(u);
+          setTimeout(() => { void refreshRequests(); }, 0);
         }
       } else {
         if (!demoRef.current) setUser(null);
@@ -249,6 +264,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data.session && !demoRef.current) {
         const u = await loadUserFromSession(data.session, superAdminEmails);
         if (!demoRef.current) setUser(u);
+        void refreshRequests();
       }
       setLoading(false);
     });
