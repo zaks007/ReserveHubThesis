@@ -1,18 +1,14 @@
--- ReserveHub initial schema
--- Run this in Supabase SQL Editor (Project → SQL Editor → New query)
 
--- =========================================================
 -- 1. ENUMS
--- =========================================================
 create type public.app_role as enum ('super_admin', 'institution_admin', 'campus_admin', 'staff', 'user');
 create type public.institution_type as enum ('hotel', 'university', 'sports', 'garden', 'airbnb');
 create type public.price_unit as enum ('hour', 'night', 'month');
 create type public.booking_status as enum ('pending', 'approved', 'rejected', 'cancelled');
 create type public.request_status as enum ('pending', 'approved', 'rejected');
 
--- =========================================================
+
 -- 2. PROFILES (1:1 with auth.users)
--- =========================================================
+
 create table public.profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text not null unique,
@@ -31,9 +27,7 @@ create policy "Users update own profile"
 create policy "Users insert own profile"
   on public.profiles for insert to authenticated with check (auth.uid() = id);
 
--- =========================================================
 -- 3. USER ROLES (separate table — never on profiles)
--- =========================================================
 create table public.user_roles (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -55,9 +49,8 @@ language sql stable security definer set search_path = public as $$
   select exists (select 1 from public.user_roles where user_id = _user_id and role = _role)
 $$;
 
--- =========================================================
+
 -- 4. INSTITUTIONS / CAMPUSES / BUILDINGS / SPACES
--- =========================================================
 create table public.institutions (
   id uuid primary key default gen_random_uuid(),
   name text not null,
@@ -146,9 +139,8 @@ create policy "Admins manage spaces" on public.spaces for all to authenticated
   using (public.has_role(auth.uid(), 'super_admin') or public.has_role(auth.uid(), 'institution_admin') or public.has_role(auth.uid(), 'campus_admin') or public.has_role(auth.uid(), 'staff'))
   with check (public.has_role(auth.uid(), 'super_admin') or public.has_role(auth.uid(), 'institution_admin') or public.has_role(auth.uid(), 'campus_admin') or public.has_role(auth.uid(), 'staff'));
 
--- =========================================================
 -- 5. BOOKINGS
--- =========================================================
+
 create table public.bookings (
   id uuid primary key default gen_random_uuid(),
   space_id uuid not null references public.spaces(id) on delete cascade,
@@ -185,9 +177,8 @@ create policy "Users cancel own bookings, admins manage all"
          or public.has_role(auth.uid(), 'campus_admin')
          or public.has_role(auth.uid(), 'staff'));
 
--- =========================================================
+
 -- 6. INSTITUTION REGISTRATION REQUESTS
--- =========================================================
 create table public.institution_requests (
   id uuid primary key default gen_random_uuid(),
   requester_user_id uuid references auth.users(id) on delete set null,
@@ -217,9 +208,7 @@ create policy "Super admins update requests"
   using (public.has_role(auth.uid(), 'super_admin'))
   with check (public.has_role(auth.uid(), 'super_admin'));
 
--- =========================================================
 -- 7. PAYMENT METHODS (prototype only — never store real PAN/CVC)
--- =========================================================
 create table public.payment_methods (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users(id) on delete cascade,
@@ -237,9 +226,9 @@ alter table public.payment_methods enable row level security;
 create policy "Own payment methods" on public.payment_methods for all to authenticated
   using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
--- =========================================================
+
 -- 8. AUTO-CREATE PROFILE ON SIGNUP
--- =========================================================
+
 create or replace function public.handle_new_user()
 returns trigger language plpgsql security definer set search_path = public as $$
 begin
