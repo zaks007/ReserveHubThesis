@@ -82,6 +82,8 @@ export default function ForgotPassword() {
         throw updateError;
       }
 
+      await supabase.auth.signOut();
+
       toast({
         title: "Password updated successfully!",
         description: "You can now sign in with your new password.",
@@ -121,7 +123,7 @@ export default function ForgotPassword() {
                 <Mail className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                 <Input
                   type="email"
-                  placeholder="user@example.com"
+                  placeholder="Enter your Email address"
                   className="pl-9"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -179,7 +181,7 @@ export default function ForgotPassword() {
                   placeholder="••••••••"
                   className="pl-9"
                   value={confirmPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
                   required
                   minLength={6}
                 />
@@ -212,7 +214,7 @@ export default function ForgotPassword() {
             onClick={() => setShowDefenseRationale((prev) => !prev)}
             className="text-primary hover:underline flex items-center gap-1 font-medium"
           >
-            <ShieldCheck className="h-3.5 w-3.5" /> Thesis Security Rationale
+          
           </button>
         </div>
 

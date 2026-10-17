@@ -60,7 +60,7 @@ const Index = () => {
             Book Any Space in Debrecen
           </h1>
           <p className="text-lg md:text-xl text-primary-foreground/80 mb-8 max-w-2xl mx-auto animate-fade-in" style={{ animationDelay: "0.1s" }}>
-            Find and reserve hotel rooms, lecture halls, sports pitches, and event venues across institutions in Debrecen.
+            Find and reserve hotel rooms, lecture halls, sports pitches, community gardens and airbnb's across institutions in Debrecen.
           </p>
 
           {/* Search Bar */}
@@ -99,14 +99,7 @@ const Index = () => {
                 </PopoverContent>
               </Popover>
               <Popover>
-                <PopoverTrigger asChild>
-                  <button type="button" className="flex items-center justify-center gap-2 rounded-lg bg-secondary px-3 py-2 md:justify-start">
-                    <Users className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className={`text-sm ${guests ? "text-foreground" : "text-muted-foreground"}`}>
-                      {guests ? `${guests} guest${guests > 1 ? "s" : ""}` : "Any guests"}
-                    </span>
-                  </button>
-                </PopoverTrigger>
+              
                 <PopoverContent className="w-56" align="start">
                   <div className="flex items-center justify-between">
                     <span className="text-sm font-medium">Guests</span>

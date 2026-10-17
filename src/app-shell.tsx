@@ -30,9 +30,9 @@ import SignupSuperAdmin from "./pages/auth/SignupSuperAdmin";
 import Verify from "./pages/auth/Verify";
 import AuthCallback from "./pages/auth/AuthCallback";
 import Login from "./pages/auth/Login";
+import ForgotPassword from "./pages/auth/ForgotPassword";
 import NotFound from "./pages/NotFound";
 import TeacherDashboard from "./pages/TeacherDashboard";
-
 
 export function AppShell() {
   return (
@@ -77,6 +77,7 @@ export function AppShell() {
                   <Route path="/auth/signup/super-admin" element={<SignupSuperAdmin />} />
                   <Route path="/auth/verify" element={<Verify />} />
                   <Route path="/auth/callback" element={<AuthCallback />} />
+                  <Route path="/auth/forgot-password" element={<ForgotPassword />} />
 
                   <Route path="*" element={<NotFound />} />
                 </Routes>
@@ -89,3 +90,5 @@ export function AppShell() {
     </TooltipProvider>
   );
 }
+
+export default AppShell;
